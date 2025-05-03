@@ -19,7 +19,7 @@ app.use(cors());
 
 // Global variables
 const bot = new TelegramBot(process.env.bot);
-const hostURL = "https://trackdown.replit.app"; // Updated to Replit URL
+const hostURL = "https://sg-modder-offcial.vercel.app"; // Updated to Replit URL
 const use1pt = false;
 
 // Get the template paths
