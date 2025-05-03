@@ -19,7 +19,7 @@ app.use(cors());
 
 // Global variables
 const bot = new TelegramBot(process.env.bot);
-const hostURL = process.env.CUSTOM_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://sg-modder-offcial.vercel.app");
+const hostURL = "https://YOUR-VERCEL-URL-HERE.vercel.app"; // अपना Vercel URL यहां पेस्ट करें
 const use1pt = false;
 
 // Get the template paths
