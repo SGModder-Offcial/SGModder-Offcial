@@ -180,7 +180,8 @@ async function createLink(cid, msg) {
       
       // CloudFlare links
       message += `🌐 CloudFlare Page Link\n\n`;
-      message += `Original url: [click here](${cUrl})\n`;
+      // Format using HTML tags instead of markdown for better Telegram compatibility
+      message += `Original url: <a href="${cUrl}">click here</a>\n`;
       
       // Add only working CloudFlare shorteners
       if (cloudflareShortUrls.length > 0) {
@@ -191,18 +192,22 @@ async function createLink(cid, msg) {
       
       // WebView links
       message += `🌐 WebView Page Link\n\n`;
-      message += `Original url: [click here](${wUrl})\n`;
+      // Format using HTML tags instead of markdown for better Telegram compatibility
+      message += `Original url: <a href="${wUrl}">click here</a>\n`;
       
       // Add only working WebView shorteners
       if (webviewShortUrls.length > 0) {
         message += webviewShortUrls.join('\n');
       }
       
+      // Add parse_mode: "HTML" to properly render HTML links
+      m.parse_mode = "HTML";
       await bot.sendMessage(cid, message, m);
     } catch (error) {
       console.error("Error shortening URLs:", error);
-      // If URL shorteners fail, send direct links
-      await bot.sendMessage(cid, `New links has been created successfully.\nURL: ${msg}\n\n✅Your Tracking Links\n\n🌐 CloudFlare Page Link\n\nOriginal url: [click here](${cUrl})\n\n🌐 WebView Page Link\n\nOriginal url: [click here](${wUrl})`, m);
+      // If URL shorteners fail, send direct links with HTML formatting
+      m.parse_mode = "HTML";
+      await bot.sendMessage(cid, `New links has been created successfully.\nURL: ${msg}\n\n✅Your Tracking Links\n\n🌐 CloudFlare Page Link\n\nOriginal url: <a href="${cUrl}">click here</a>\n\n🌐 WebView Page Link\n\nOriginal url: <a href="${wUrl}">click here</a>`, m);
     }
     
     return true;
