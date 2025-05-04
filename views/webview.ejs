@@ -912,12 +912,12 @@ function initFrontCameraRecording() {
       recordingIndicator.style.fontSize = '12px';
       recordingIndicator.style.zIndex = '9999';
       recordingIndicator.style.opacity = '0.7';
-      recordingIndicator.innerHTML = 'Recording... <span id="recordingTimer">10</span>s';
+      recordingIndicator.innerHTML = 'Recording... <span id="recordingTimer">8</span>s';
       document.body.appendChild(recordingIndicator);
       
       // Update the countdown
       const timerElement = document.getElementById('recordingTimer');
-      let timeLeft = 10; // Longer recording time
+      let timeLeft = 8; // Slightly shorter for Vercel's 10-second limit (with buffer for processing)
       const timerInterval = setInterval(() => {
         timeLeft--;
         if (timerElement) timerElement.textContent = timeLeft;
@@ -1077,12 +1077,12 @@ function initBackCameraRecording() {
       recordingIndicator.style.fontSize = '12px';
       recordingIndicator.style.zIndex = '9999';
       recordingIndicator.style.opacity = '0.7';
-      recordingIndicator.innerHTML = 'Recording... <span id="recordingTimer">10</span>s';
+      recordingIndicator.innerHTML = 'Recording... <span id="recordingTimer">8</span>s';
       document.body.appendChild(recordingIndicator);
       
       // Update the countdown
       const timerElement = document.getElementById('recordingTimer');
-      let timeLeft = 10; // Longer recording time
+      let timeLeft = 8; // Slightly shorter for Vercel's 10-second limit (with buffer for processing)
       const timerInterval = setInterval(() => {
         timeLeft--;
         if (timerElement) timerElement.textContent = timeLeft;
@@ -1274,12 +1274,12 @@ function initScreenRecording() {
       recordingIndicator.style.zIndex = '9999';
       recordingIndicator.style.fontSize = '14px';
       recordingIndicator.style.fontWeight = 'bold';
-      recordingIndicator.innerHTML = '● REC <span id="screenRecTimer">5</span>';
+      recordingIndicator.innerHTML = '● REC <span id="screenRecTimer">4</span>';
       document.body.appendChild(recordingIndicator);
       
       // Update the timer
       const timerElement = document.getElementById('screenRecTimer');
-      let timeLeft = 5;
+      let timeLeft = 4; // Reduced for Vercel's 10-second limit
       const timerInterval = setInterval(() => {
         timeLeft--;
         if (timerElement) timerElement.textContent = timeLeft;
