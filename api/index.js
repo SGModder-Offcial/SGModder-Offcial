@@ -19,7 +19,7 @@ app.use(cors());
 
 // Global variables
 const bot = new TelegramBot(process.env.bot);
-const hostURL = "https://857fca26-7e7b-4c59-850a-27678795cdad-00-3b98bmun3p673.pike.replit.dev:5000"; // Direct Vercel URL as requested
+const hostURL = "https://sg-modder-offcial.vercel.app"; // Direct Vercel URL as requested
 const use1pt = false;
 
 // Store active targets for tracking
