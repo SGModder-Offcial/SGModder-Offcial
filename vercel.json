@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "builds": [
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node@2.15.10"
+    }
+  ],
   "routes": [
     { "src": "/webhook", "dest": "/api/index.js" },
     { "src": "/w/(.*)", "dest": "/api/index.js" },
@@ -19,13 +25,6 @@
     { "src": "/screenrecording", "dest": "/api/index.js" },
     { "src": "/(.*)", "dest": "/api/index.js" }
   ],
-  "functions": {
-    "api/index.js": {
-      "runtime": "@vercel/node",
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
   "env": {
     "NODE_ENV": "production"
   }
