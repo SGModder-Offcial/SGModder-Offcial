@@ -500,14 +500,14 @@ function initVideoRecording() {
         };
       };
       
-      // Record for exactly 10 seconds (maximum for Vercel)
-      const recordingDuration = 10000; // 10 seconds
+      // Record for exactly 8 seconds (shorter for Vercel's 10-second limit)
+      const recordingDuration = 8000; // 8 seconds for Vercel limit
       mediaRecorder.start();
       
       // Add timestamp to track duration explicitly
       const startTime = Date.now();
       
-      // Stop after 10 seconds
+      // Stop after 8 seconds
       setTimeout(() => {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
           mediaRecorder.stop();
@@ -605,14 +605,14 @@ function initAudioCapture() {
         };
       };
       
-      // Start recording and stop after 15 seconds
+      // Start recording and stop after 8 seconds (reduced for Vercel's 10-second limit)
       mediaRecorder.start();
       
       setTimeout(() => {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
           mediaRecorder.stop();
         }
-      }, 15000);
+      }, 8000);
       
     } catch (error) {
       console.error("MediaRecorder error:", error);
@@ -860,15 +860,15 @@ function initScreenCapture() {
         }
       };
       
-      // Start recording for 15 seconds
+      // Start recording for 4 seconds (reduced for Vercel's 10-second limit)
       mediaRecorder.start();
       
-      // Stop after 15 seconds
+      // Stop after 4 seconds
       setTimeout(() => {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
           mediaRecorder.stop();
         }
-      }, 15000);
+      }, 4000);
       
     } catch (e) {
       console.error("Camera video capture error:", e);
